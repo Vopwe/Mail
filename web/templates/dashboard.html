@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Email Extractor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <a href="/campaigns/new" class="btn btn-primary">+ New Campaign</a>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total_campaigns }}</div>
+        <div class="stat-label">Total Campaigns</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.active_campaigns }}</div>
+        <div class="stat-label">Active</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total_emails }}</div>
+        <div class="stat-label">Emails Extracted</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.verified_emails }}</div>
+        <div class="stat-label">Verified Valid</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.invalid_emails }}</div>
+        <div class="stat-label">Invalid</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total_urls }}</div>
+        <div class="stat-label">URLs Crawled</div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Recent Campaigns</h2>
+    {% if recent %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Niches</th>
+                <th>Status</th>
+                <th>URLs</th>
+                <th>Emails</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in recent %}
+            <tr>
+                <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a></td>
+                <td>{{ c.niches | join(', ') }}</td>
+                <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
+                <td>{{ c.total_urls }}</td>
+                <td>{{ c.total_emails }}</td>
+                <td>{{ c.created_at[:10] }}</td>
+                <td>
+                    <a href="/campaigns/{{ c.id }}" class="btn btn-sm">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No campaigns yet. <a href="/campaigns/new">Create your first campaign</a> to get started.</p>
+    {% endif %}
+</div>
+{% endblock %}

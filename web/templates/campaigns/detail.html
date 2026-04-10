@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — GraphenMail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ campaign.name }}</h1>
+        <p class="subtitle">
+            <span class="badge badge-{{ campaign.status }}">{{ campaign.status }}</span>
+            &mdash; {{ campaign.niches | join(', ') }} in {{ campaign.countries | join(', ') }}
+        </p>
+    </div>
+    <div class="header-actions">
+        {% if campaign.status in ['pending', 'done', 'failed'] %}
+        <form method="post" action="/campaigns/{{ campaign.id }}/run" class="inline-form">
+            <button type="submit" class="btn btn-primary">
+                {% if campaign.status == 'pending' %}Run Campaign{% else %}Re-run{% endif %}
+            </button>
+        </form>
+        {% endif %}
+        {% if campaign.total_emails > 0 %}
+        <form method="post" action="/verification" class="inline-form">
+            <input type="hidden" name="action" value="verify_campaign">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <input type="hidden" name="redirect_to" value="/campaigns/{{ campaign.id }}">
+            <button type="submit" class="btn btn-primary">Verify All Emails</button>
+        </form>
+        {% endif %}
+        <a href="/emails?campaign_id={{ campaign.id }}" class="btn btn-secondary">View All Emails</a>
+    </div>
+</div>
+
+{% if campaign.status in ['generating', 'crawling'] %}
+<div class="progress-section" id="progress-section" data-campaign-id="{{ campaign.id }}">
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+    </div>
+    <p class="progress-text" id="progress-text">Running...</p>
+</div>
+{% endif %}
+
+<!-- Verification progress (shown by JS when verification task is running) -->
+<div class="verify-progress" id="verify-progress" data-task-id="{{ request.args.get('verification_task', '') }}" style="display: none;">
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="verify-progress-bar" style="width: 0%"></div>
+    </div>
+    <p class="progress-text" id="verify-progress-text">Verifying...</p>
+</div>
+
+<div class="stats-grid stats-grid-sm">
+    <div class="stat-card">
+        <div class="stat-number">{{ campaign.total_urls }}</div>
+        <div class="stat-label">URLs Generated</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ campaign.total_emails }}</div>
+        <div class="stat-label">Emails Found</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ campaign.niches | length }}</div>
+        <div class="stat-label">Niches</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ campaign.countries | length }}</div>
+        <div class="stat-label">Countries</div>
+    </div>
+</div>
+
+{% if urls %}
+<div class="section">
+    <details>
+        <summary><h2 class="inline">Generated URLs ({{ urls | length }})</h2></summary>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Niche</th>
+                    <th>City</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in urls[:100] %}
+                <tr>
+                    <td><a href="{{ u.url }}" target="_blank" rel="noopener">{{ u.domain }}</a></td>
+                    <td>{{ u.niche }}</td>
+                    <td>{{ u.city }}</td>
+                    <td><span class="badge badge-{{ u.status }}">{{ u.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if urls | length > 100 %}
+        <p class="hint">Showing first 100 of {{ urls | length }} URLs</p>
+        {% endif %}
+    </details>
+</div>
+{% endif %}
+
+{% if emails %}
+<div class="section">
+    <h2>Extracted Emails ({{ total_emails }} total)</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Domain</th>
+                <th>Source</th>
+                <th>Niche</th>
+                <th>City</th>
+                <th>Verification</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in emails %}
+            <tr>
+                <td>{{ e.email }}</td>
+                <td>{{ e.domain }}</td>
+                <td><a href="{{ e.source_url }}" target="_blank" rel="noopener">{{ e.source_domain }}</a></td>
+                <td>{{ e.niche }}</td>
+                <td>{{ e.city }}</td>
+                <td>
+                    <span class="badge badge-{{ e.verification }}">{{ e.verification }}</span>
+                    {% if e.verification_method and e.verification_method != 'pending' %}
+                    <span class="email-meta">
+                        {{ e.verification_method }}
+                        {% if e.mailbox_confidence and e.mailbox_confidence != 'unknown' %} · mailbox {{ e.mailbox_confidence }}{% endif %}
+                        {% if e.domain_confidence and e.domain_confidence != 'unknown' %} · domain {{ e.domain_confidence }}{% endif %}
+                        {% if e.is_catch_all %} · catch-all{% endif %}
+                    </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if total_emails > 50 %}
+    <p><a href="/emails?campaign_id={{ campaign.id }}">View all {{ total_emails }} emails &rarr;</a></p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if campaign.status in ['generating', 'crawling'] %}
+    pollTasks();
+{% endif %}
+    pollVerificationTask();
+</script>
+{% endblock %}
