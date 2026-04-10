@@ -101,6 +101,42 @@
         </div>
     </div>
 
+    <h2>Password Protection</h2>
+
+    {% if has_password %}
+    <div class="form-row">
+        <div class="form-group">
+            <label for="current_password">Current Password</label>
+            <input type="password" id="current_password" name="current_password" placeholder="Enter current password">
+            <span class="hint">Required to change password.</span>
+        </div>
+        <div class="form-group">
+            <label for="new_password">New Password</label>
+            <input type="password" id="new_password" name="new_password" placeholder="Leave empty to keep current">
+            <span class="hint">Leave blank to keep existing password.</span>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="remove_password" value="1" style="width:auto; margin-right:6px;">
+                Remove password protection
+            </label>
+            <span class="hint">Unprotects the app — anyone with the URL can access it.</span>
+        </div>
+        <div class="form-group"></div>
+    </div>
+    {% else %}
+    <div class="form-row">
+        <div class="form-group">
+            <label for="new_password">Set Password</label>
+            <input type="password" id="new_password" name="new_password" placeholder="Enter a password to protect the app">
+            <span class="hint">Optional. Protects the app with a login screen.</span>
+        </div>
+        <div class="form-group"></div>
+    </div>
+    {% endif %}
+
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Save Settings</button>
     </div>

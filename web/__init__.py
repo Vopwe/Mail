@@ -1,7 +1,10 @@
 """
 Flask app factory.
 """
+import secrets
 from flask import Flask
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import database
 
 
@@ -11,9 +14,23 @@ def create_app() -> Flask:
         static_folder="static",
         template_folder="templates",
     )
-    app.secret_key = "email-extractor-local-dev-key"
+    app.secret_key = secrets.token_hex(32)
 
     database.init_db()
+
+    # ── Rate Limiting ────────────────────────────────────────────
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["200 per minute"],
+        storage_uri="memory://",
+    )
+    # Stricter limits on auth endpoints
+    limiter.limit("10 per minute")(lambda: None)  # placeholder, real limits below
+
+    # ── Auth ─────────────────────────────────────────────────────
+    from web.auth import init_auth
+    init_auth(app)
 
     from web.routes.dashboard import bp as dashboard_bp
     from web.routes.campaigns import bp as campaigns_bp
@@ -28,6 +45,10 @@ def create_app() -> Flask:
     app.register_blueprint(verification_bp, url_prefix="/verification")
     app.register_blueprint(settings_bp, url_prefix="/settings")
     app.register_blueprint(api_bp, url_prefix="/api")
+
+    # Rate-limit login attempts more strictly
+    limiter.limit("5 per minute")(app.view_functions.get("auth.login", lambda: None))
+
     app.teardown_appcontext(lambda _exc: database.close_db())
 
     return app

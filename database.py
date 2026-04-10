@@ -421,3 +421,58 @@ def get_distinct_values(column: str) -> list[str]:
         return []
     rows = db.execute(f"SELECT DISTINCT {column} FROM emails WHERE {column} IS NOT NULL ORDER BY {column}").fetchall()
     return [r[0] for r in rows]
+
+
+# ── Cross-Campaign Dedup ─────────────────────────────────────────────
+
+def get_existing_domains(exclude_campaign_id: int | None = None) -> set[str]:
+    """Return all domains already crawled in previous campaigns."""
+    db = get_db()
+    if exclude_campaign_id:
+        rows = db.execute(
+            "SELECT DISTINCT domain FROM urls WHERE campaign_id != ?",
+            (exclude_campaign_id,),
+        ).fetchall()
+    else:
+        rows = db.execute("SELECT DISTINCT domain FROM urls").fetchall()
+    return {r[0] for r in rows}
+
+
+# ── Chart Data ───────────────────────────────────────────────────────
+
+def get_chart_data() -> dict:
+    """Return data for dashboard charts."""
+    db = get_db()
+
+    # Emails by verification status
+    verification_rows = db.execute(
+        "SELECT verification, COUNT(*) as cnt FROM emails GROUP BY verification"
+    ).fetchall()
+    verification_dist = {r["verification"]: r["cnt"] for r in verification_rows}
+
+    # Emails per campaign (top 10)
+    campaign_rows = db.execute(
+        """SELECT c.name, COUNT(e.id) as cnt
+           FROM campaigns c LEFT JOIN emails e ON e.campaign_id = c.id
+           GROUP BY c.id ORDER BY cnt DESC LIMIT 10"""
+    ).fetchall()
+    campaigns_chart = {r["name"]: r["cnt"] for r in campaign_rows}
+
+    # Emails by niche (top 10)
+    niche_rows = db.execute(
+        "SELECT niche, COUNT(*) as cnt FROM emails WHERE niche IS NOT NULL GROUP BY niche ORDER BY cnt DESC LIMIT 10"
+    ).fetchall()
+    niche_dist = {r["niche"]: r["cnt"] for r in niche_rows}
+
+    # Emails by country (top 10)
+    country_rows = db.execute(
+        "SELECT country, COUNT(*) as cnt FROM emails WHERE country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT 10"
+    ).fetchall()
+    country_dist = {r["country"]: r["cnt"] for r in country_rows}
+
+    return {
+        "verification": verification_dist,
+        "campaigns": campaigns_chart,
+        "niches": niche_dist,
+        "countries": country_dist,
+    }

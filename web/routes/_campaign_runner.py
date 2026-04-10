@@ -114,6 +114,16 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
                     message=f"[{completed}/{total_combos}] Generated: {niche} in {city}, {country}",
                 )
 
+    # Cross-campaign domain dedup: remove URLs already crawled elsewhere
+    if all_url_rows:
+        existing_domains = database.get_existing_domains(exclude_campaign_id=campaign_id)
+        before = len(all_url_rows)
+        all_url_rows = [r for r in all_url_rows if r["domain"] not in existing_domains]
+        deduped = before - len(all_url_rows)
+        if deduped:
+            logger.info(f"Cross-campaign dedup: removed {deduped} duplicate domains")
+            tasks.update_task(task_id, message=f"Removed {deduped} duplicate domains from other campaigns")
+
     if all_url_rows:
         database.insert_urls(all_url_rows)
     database.update_campaign_counts(campaign_id)

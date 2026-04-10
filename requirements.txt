@@ -4,6 +4,7 @@ lxml>=5.1
 dnspython>=2.6
 aiosmtplib>=3.0
 flask>=3.0
+flask-limiter>=3.5
 openai>=1.30
 pydantic>=2.7
 tldextract>=5.1
