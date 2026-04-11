@@ -42,30 +42,99 @@ function pollTasks() {
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const progressSection = document.getElementById('progress-section');
+    const statusBadge = document.getElementById('campaign-status-badge');
 
-    if (!progressBar && !progressSection) return;
+    if (!progressSection) return;
+
+    const campaignId = Number(progressSection.dataset.campaignId || 0);
+    let taskId = progressSection.dataset.taskId || '';
+    let hasReloaded = false;
+
+    function setStatus(status) {
+        if (!statusBadge) return;
+        statusBadge.textContent = status;
+        statusBadge.className = `badge badge-${status}`;
+    }
+
+    function setProgress(percent, message) {
+        progressSection.style.display = '';
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (progressText) progressText.textContent = message;
+    }
+
+    function reloadWithoutTaskParam() {
+        if (hasReloaded) return;
+        hasReloaded = true;
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete('campaign_task');
+
+        setTimeout(() => {
+            const target = nextUrl.toString();
+            if (target === window.location.href) {
+                window.location.reload();
+            } else {
+                window.location.replace(target);
+            }
+        }, 1500);
+    }
+
+    function pickLatestCampaignTask(tasks) {
+        return tasks
+            .filter(task => task.task_type === 'campaign' && task.campaign_id === campaignId)
+            .sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')))
+            .pop() || null;
+    }
+
+    function handleTask(task) {
+        if (!task) {
+            return;
+        }
+
+        taskId = task.task_id || taskId;
+        progressSection.dataset.taskId = taskId;
+
+        if (task.status === 'failed') {
+            setStatus('failed');
+            setProgress(task.percent || 0, task.error || 'Campaign failed.');
+            return;
+        }
+
+        if (task.status === 'completed') {
+            setStatus('done');
+            setProgress(100, task.message || 'Completed!');
+            reloadWithoutTaskParam();
+            return;
+        }
+
+        const status = task.message && task.message.startsWith('Generating')
+            ? 'generating'
+            : 'crawling';
+        setStatus(status);
+        setProgress(task.percent || 0, task.message || 'Running...');
+        setTimeout(poll, 1500);
+    }
 
     function poll() {
+        if (hasReloaded) return;
+
+        if (taskId) {
+            fetch(`/api/tasks/${taskId}`)
+                .then(r => (r.ok ? r.json() : Promise.reject()))
+                .then(handleTask)
+                .catch(() => {
+                    taskId = '';
+                    progressSection.dataset.taskId = '';
+                    setTimeout(poll, 1500);
+                });
+            return;
+        }
+
         fetch('/api/tasks')
             .then(r => r.json())
             .then(tasks => {
-                const running = tasks.filter(t => t.task_type === 'campaign' && t.status === 'running');
-                const latest = running.length > 0 ? running[running.length - 1] : null;
-
-                if (latest) {
-                    if (progressSection) progressSection.style.display = '';
-                    if (progressBar) progressBar.style.width = latest.percent + '%';
-                    if (progressText) progressText.textContent = latest.message || 'Running...';
-                    setTimeout(poll, 2000);
-                } else {
-                    const completed = tasks.filter(t => t.task_type === 'campaign' && t.status === 'completed');
-                    if (completed.length > 0) {
-                        const last = completed[completed.length - 1];
-                        if (progressBar) progressBar.style.width = '100%';
-                        if (progressText) progressText.textContent = last.message || 'Completed!';
-                        setTimeout(() => location.reload(), 1500);
-                    }
-                }
+                const latest = pickLatestCampaignTask(tasks);
+                handleTask(latest);
             })
             .catch(() => setTimeout(poll, 5000));
     }

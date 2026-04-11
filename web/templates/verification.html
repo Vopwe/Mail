@@ -177,7 +177,7 @@
             </p>
             {% else %}
             <div class="health-warn">
-                <strong>SMTP port 25 is blocked.</strong> Verification fell back to DNS-based scoring. Deploy on a VPS (like Contabo) where port 25 is open for full SMTP verification.
+                <strong>SMTP checks were unavailable during this run.</strong> Verification fell back to DNS-based scoring. This can happen when outbound SMTP connectivity is blocked or when the probe cannot reach the test MX hosts from the server.
             </div>
             {% endif %}
         </div>
@@ -238,7 +238,7 @@
                     <td>{{ s.result_invalid }}</td>
                     <td>{{ s.result_risky }}</td>
                     <td>{{ s.result_unknown }}</td>
-                    <td>{% if s.smtp_available %}<span class="badge badge-valid">Open</span>{% else %}<span class="badge badge-invalid">Blocked</span>{% endif %}</td>
+                    <td>{% if s.smtp_available %}<span class="badge badge-valid">Open</span>{% else %}<span class="badge badge-invalid">Unavailable</span>{% endif %}</td>
                     <td>{{ s.duration_seconds|default(0) }}s</td>
                 </tr>
                 {% endfor %}

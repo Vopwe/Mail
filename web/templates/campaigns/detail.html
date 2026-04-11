@@ -6,7 +6,7 @@
     <div>
         <h1>{{ campaign.name }}</h1>
         <p class="subtitle">
-            <span class="badge badge-{{ campaign.status }}">{{ campaign.status }}</span>
+            <span class="badge badge-{{ campaign.status }}" id="campaign-status-badge">{{ campaign.status }}</span>
             &mdash; {{ campaign.niches | join(', ') }} in {{ campaign.countries | join(', ') }}
         </p>
     </div>
@@ -30,12 +30,24 @@
     </div>
 </div>
 
-{% if campaign.status in ['generating', 'crawling'] %}
-<div class="progress-section" id="progress-section" data-campaign-id="{{ campaign.id }}">
+{% if campaign.status in ['generating', 'crawling'] or current_task %}
+<div class="progress-section" id="progress-section" data-campaign-id="{{ campaign.id }}" data-task-id="{{ task_id or '' }}">
     <div class="progress-bar-container">
-        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        <div class="progress-bar" id="progress-bar" style="width: {{ current_task.percent if current_task else 0 }}%"></div>
     </div>
-    <p class="progress-text" id="progress-text">Running...</p>
+    <p class="progress-text" id="progress-text">
+        {% if current_task %}
+            {% if current_task.status == 'completed' %}
+                {{ current_task.message or 'Completed!' }}
+            {% elif current_task.status == 'failed' %}
+                {{ current_task.error or 'Campaign failed.' }}
+            {% else %}
+                {{ current_task.message or 'Running...' }}
+            {% endif %}
+        {% else %}
+            Running...
+        {% endif %}
+    </p>
 </div>
 {% endif %}
 
@@ -214,7 +226,7 @@
 
 {% block scripts %}
 <script>
-{% if campaign.status in ['generating', 'crawling'] %}
+{% if campaign.status in ['generating', 'crawling'] or task_id %}
     pollTasks();
 {% endif %}
     pollVerificationTask();

@@ -207,6 +207,46 @@ class RegressionTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_campaign_run_redirects_with_task_for_detail_polling(self):
+        app = create_app()
+        app.testing = True
+        client = app.test_client()
+        campaign_id = database.insert_campaign("Live progress", ["agency"], ["USA"], ["Seattle"])
+
+        with patch("web.routes.campaigns.tasks.run_in_background") as run_in_background:
+            response = client.post(f"/campaigns/{campaign_id}/run", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        location = response.headers["Location"]
+        self.assertIn(f"/campaigns/{campaign_id}", location)
+        self.assertIn("campaign_task=", location)
+        run_in_background.assert_called_once()
+
+    def test_smtp_probe_tries_multiple_hosts_before_reporting_unavailable(self):
+        attempts = []
+
+        class _ConnectionStub:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def fake_create_connection(address, timeout=None):
+            attempts.append((address, timeout))
+            if address[0] == "mx1.example.com":
+                raise OSError("first host failed")
+            return _ConnectionStub()
+
+        with patch("verification.verifier.socket.create_connection", side_effect=fake_create_connection):
+            reachable = verifier._probe_smtp_connectivity(("mx1.example.com", "mx2.example.com"), timeout=3.0)
+
+        self.assertTrue(reachable)
+        self.assertEqual(
+            attempts,
+            [(("mx1.example.com", 25), 3.0), (("mx2.example.com", 25), 3.0)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

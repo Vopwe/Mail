@@ -12,6 +12,7 @@ from datetime import datetime
 class TaskStatus:
     task_id: str
     task_type: str = ""
+    campaign_id: int | None = None
     status: str = "running"   # running | completed | failed
     progress: int = 0
     total: int = 0
@@ -24,6 +25,7 @@ class TaskStatus:
         return {
             "task_id": self.task_id,
             "task_type": self.task_type,
+            "campaign_id": self.campaign_id,
             "status": self.status,
             "progress": self.progress,
             "total": self.total,
@@ -40,12 +42,13 @@ _tasks: dict[str, TaskStatus] = {}
 _lock = threading.Lock()
 
 
-def create_task(task_type: str = "") -> str:
+def create_task(task_type: str = "", campaign_id: int | None = None) -> str:
     task_id = uuid.uuid4().hex[:12]
     with _lock:
         _tasks[task_id] = TaskStatus(
             task_id=task_id,
             task_type=task_type,
+            campaign_id=campaign_id,
             started_at=datetime.now().isoformat(),
         )
     return task_id
@@ -53,6 +56,25 @@ def create_task(task_type: str = "") -> str:
 
 def get_task(task_id: str) -> TaskStatus | None:
     return _tasks.get(task_id)
+
+
+def find_latest_task(
+    task_type: str | None = None,
+    campaign_id: int | None = None,
+    statuses: tuple[str, ...] | None = None,
+) -> TaskStatus | None:
+    with _lock:
+        matches = list(_tasks.values())
+
+    if task_type is not None:
+        matches = [task for task in matches if task.task_type == task_type]
+    if campaign_id is not None:
+        matches = [task for task in matches if task.campaign_id == campaign_id]
+    if statuses is not None:
+        matches = [task for task in matches if task.status in statuses]
+
+    matches.sort(key=lambda task: task.started_at or "")
+    return matches[-1] if matches else None
 
 
 def update_task(task_id: str, **kwargs):

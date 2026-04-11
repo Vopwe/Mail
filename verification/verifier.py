@@ -92,6 +92,11 @@ _mx_sem_lock = asyncio.Lock()
 _smtp_available: bool | None = None
 _smtp_test_done = threading.Event()
 _smtp_test_started = threading.Event()
+SMTP_PROBE_HOSTS = (
+    "gmail-smtp-in.l.google.com",
+    "alt1.gmail-smtp-in.l.google.com",
+    "aspmx.l.google.com",
+)
 
 # ── Cached sets for spam trap checks ────────────────────────────────
 _safe_roles_set: set | None = None
@@ -192,8 +197,21 @@ def _check_domain_a_record(domain: str) -> bool:
         return False
 
 
+def _probe_smtp_connectivity(
+    hosts: tuple[str, ...] = SMTP_PROBE_HOSTS,
+    timeout: float = 5.0,
+) -> bool:
+    for host in hosts:
+        try:
+            with socket.create_connection((host, 25), timeout=timeout):
+                return True
+        except OSError as exc:
+            logger.debug("SMTP probe failed for %s: %s", host, exc)
+    return False
+
+
 async def _test_smtp_availability() -> bool:
-    """Test if outbound port 25 works by trying a known SMTP server."""
+    """Test outbound SMTP reachability with a lightweight TCP probe."""
     global _smtp_available
 
     if _smtp_available is not None:
@@ -205,18 +223,12 @@ async def _test_smtp_availability() -> bool:
 
     _smtp_test_started.set()
     try:
-        smtp = aiosmtplib.SMTP(
-            hostname="gmail-smtp-in.l.google.com",
-            port=25,
-            timeout=5,
-        )
-        await smtp.connect()
-        await smtp.quit()
-        _smtp_available = True
-        logger.info("SMTP port 25 is OPEN — full verification available")
-    except Exception:
-        _smtp_available = False
-        logger.info("SMTP port 25 is BLOCKED — using MX + DNS-based verification")
+        _smtp_available = await asyncio.to_thread(_probe_smtp_connectivity)
+        if _smtp_available:
+            logger.info("SMTP port 25 is reachable - full verification available")
+        else:
+            logger.info("SMTP connectivity check failed - using MX + DNS-based verification")
+        return _smtp_available
     finally:
         _smtp_test_done.set()
     return _smtp_available

@@ -52,13 +52,28 @@ def detail(campaign_id):
         flash("Campaign not found.", "error")
         return redirect(url_for("campaigns.list_campaigns"))
 
+    requested_task_id = request.args.get("campaign_task", "").strip()
+    task_id = requested_task_id
+    current_task = tasks.get_task(task_id) if task_id else None
+    if current_task and current_task.campaign_id != campaign_id:
+        current_task = None
+        task_id = ""
+
+    if current_task is None:
+        current_task = tasks.find_latest_task(task_type="campaign", campaign_id=campaign_id)
+        if current_task and current_task.status == "running":
+            task_id = current_task.task_id
+        else:
+            task_id = ""
+
     urls = database.get_urls(campaign_id)
     emails_list, total_emails = database.get_emails(campaign_id=campaign_id, per_page=50)
     crawl_stats = database.get_campaign_stats(campaign_id)
     return render_template("campaigns/detail.html",
                            campaign=campaign, urls=urls,
                            emails=emails_list, total_emails=total_emails,
-                           crawl_stats=crawl_stats)
+                           crawl_stats=crawl_stats, task_id=task_id,
+                           current_task=current_task)
 
 
 @bp.route("/<int:campaign_id>/run", methods=["POST"])
@@ -72,11 +87,11 @@ def run(campaign_id):
         flash("Campaign is already running.", "warning")
         return redirect(url_for("campaigns.detail", campaign_id=campaign_id))
 
-    task_id = tasks.create_task(task_type="campaign")
+    task_id = tasks.create_task(task_type="campaign", campaign_id=campaign_id)
     tasks.run_in_background(run_campaign, task_id, campaign_id)
 
     flash(f"Campaign started. Task ID: {task_id}", "success")
-    return redirect(url_for("campaigns.detail", campaign_id=campaign_id))
+    return redirect(url_for("campaigns.detail", campaign_id=campaign_id, campaign_task=task_id))
 
 
 @bp.route("/<int:campaign_id>/delete", methods=["POST"])
