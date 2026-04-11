@@ -449,6 +449,62 @@ a:hover {
 }
 
 /* ─── Export Options Bar ────────────────────────────────────────── */
+/* ─── Export Panel ─────────────────────────────────────────────────── */
+.export-panel {
+    margin-bottom: 16px;
+}
+
+.export-panel-toggle {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: block;
+    color: var(--text);
+}
+
+.export-panel-toggle:hover {
+    background: var(--bg);
+}
+
+.export-panel[open] .export-panel-toggle {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+}
+
+.export-panel-body {
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 16px;
+    background: var(--white);
+}
+
+.export-checks-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.export-check-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.export-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
 .export-options-bar {
     background: var(--white);
     border: 1px solid var(--border);

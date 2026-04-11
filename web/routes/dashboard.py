@@ -11,7 +11,6 @@ bp = Blueprint("dashboard", __name__)
 @bp.route("/")
 def index():
     stats = database.get_stats()
-    recent = database.get_campaigns()[:5]
     chart_data = database.get_chart_data()
-    return render_template("dashboard.html", stats=stats, recent=recent,
+    return render_template("dashboard.html", stats=stats,
                            chart_data_json=json.dumps(chart_data))

@@ -79,50 +79,75 @@
 </div>
 
 {% if crawl_stats %}
-<!-- ─── Crawl Health Monitor ──────────────────────────── -->
+<!-- ─── Crawl Health ─────────────────────────────────── -->
 <div class="section">
     <h2>Crawl Health</h2>
-    <div class="stats-grid stats-grid-sm">
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.domains_reachable }}<span class="stat-sub">/{{ crawl_stats.domains_total }}</span></div>
-            <div class="stat-label">Domains Reachable</div>
+
+    <div class="verify-health-grid">
+        <div class="verify-health-card">
+            <h3>Domain Stats</h3>
+            <table class="table table-sm table-compact">
+                <thead>
+                    <tr><th>Metric</th><th>Count</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-valid">Reachable</span></td>
+                        <td>{{ crawl_stats.domains_reachable }}<span class="stat-sub"> / {{ crawl_stats.domains_total }}</span></td>
+                        <td>Domains that responded to HTTP request</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-invalid">Unreachable</span></td>
+                        <td>{{ crawl_stats.domains_unreachable }}</td>
+                        <td>Domains that timed out or returned errors</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-valid">With Emails</span></td>
+                        <td>{{ crawl_stats.domains_with_emails }}</td>
+                        <td>Domains where at least one email was found</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-risky">Without Emails</span></td>
+                        <td>{{ crawl_stats.domains_without_emails }}</td>
+                        <td>Reachable domains with no emails on crawled pages</td>
+                    </tr>
+                    {% if crawl_stats.deduped_domains > 0 %}
+                    <tr>
+                        <td><span class="badge badge-unknown">Deduped</span></td>
+                        <td>{{ crawl_stats.deduped_domains }}</td>
+                        <td>Skipped — already crawled in other campaigns</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.pages_fetched }}</div>
-            <div class="stat-label">Pages Fetched</div>
+
+        <div class="verify-health-card">
+            <h3>Page Stats</h3>
+            <div class="stats-grid stats-grid-sm">
+                <div class="stat-card stat-card-sm">
+                    <div class="stat-number">{{ crawl_stats.pages_fetched }}</div>
+                    <div class="stat-label">Pages Fetched</div>
+                </div>
+                <div class="stat-card stat-card-sm">
+                    <div class="stat-number {% if crawl_stats.pages_failed > crawl_stats.pages_fetched * 0.3 %}stat-danger{% endif %}">{{ crawl_stats.pages_failed }}</div>
+                    <div class="stat-label">Pages Failed</div>
+                </div>
+                <div class="stat-card stat-card-sm">
+                    <div class="stat-number">{{ crawl_stats.pages_discovered }}</div>
+                    <div class="stat-label">Discovered Links</div>
+                </div>
+                <div class="stat-card stat-card-sm">
+                    <div class="stat-number">{{ crawl_stats.emails_per_domain }}</div>
+                    <div class="stat-label">Emails / Domain</div>
+                </div>
+            </div>
+            {% if crawl_stats.pages_robots_blocked > 0 %}
+            <p class="verify-meta" style="margin-top: 8px;">
+                {{ crawl_stats.pages_robots_blocked }} pages blocked by robots.txt
+            </p>
+            {% endif %}
         </div>
-        <div class="stat-card">
-            <div class="stat-number {% if crawl_stats.pages_failed > crawl_stats.pages_fetched * 0.3 %}stat-danger{% endif %}">{{ crawl_stats.pages_failed }}</div>
-            <div class="stat-label">Pages Failed</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.pages_discovered }}</div>
-            <div class="stat-label">Pages Discovered</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.domains_with_emails }}</div>
-            <div class="stat-label">Domains with Emails</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number {% if crawl_stats.domains_without_emails > crawl_stats.domains_with_emails %}stat-danger{% endif %}">{{ crawl_stats.domains_without_emails }}</div>
-            <div class="stat-label">Domains without Emails</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.emails_per_domain }}</div>
-            <div class="stat-label">Emails per Domain</div>
-        </div>
-        {% if crawl_stats.pages_robots_blocked > 0 %}
-        <div class="stat-card">
-            <div class="stat-number stat-danger">{{ crawl_stats.pages_robots_blocked }}</div>
-            <div class="stat-label">Blocked by robots.txt</div>
-        </div>
-        {% endif %}
-        {% if crawl_stats.deduped_domains > 0 %}
-        <div class="stat-card">
-            <div class="stat-number">{{ crawl_stats.deduped_domains }}</div>
-            <div class="stat-label">Deduped Domains</div>
-        </div>
-        {% endif %}
     </div>
 
     {% set reach_pct = (crawl_stats.domains_reachable / crawl_stats.domains_total * 100) | round if crawl_stats.domains_total > 0 else 0 %}
@@ -138,7 +163,7 @@
         <div class="health-warn">
             <strong>Low email yield ({{ email_pct }}% of reachable domains):</strong>
             {% if crawl_stats.pages_robots_blocked > 10 %}
-            robots.txt is blocking {{ crawl_stats.pages_robots_blocked }} pages — consider switching to "Soft" or "Off" mode in Settings.
+            robots.txt blocking {{ crawl_stats.pages_robots_blocked }} pages — switch to "Soft" or "Off" mode in Settings.
             {% else %}
             Target domains may not list emails publicly. Try different niches or increase max pages per domain.
             {% endif %}
@@ -153,7 +178,7 @@
 <div class="section">
     <details>
         <summary><h2 class="inline">Generated URLs ({{ urls | length }})</h2></summary>
-        <table class="table table-sm">
+        <table class="table table-sm table-compact">
             <thead>
                 <tr>
                     <th>URL</th>
@@ -163,7 +188,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for u in urls[:100] %}
+                {% for u in urls[:20] %}
                 <tr>
                     <td><a href="{{ u.url }}" target="_blank" rel="noopener">{{ u.domain }}</a></td>
                     <td>{{ u.niche }}</td>
@@ -173,8 +198,8 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% if urls | length > 100 %}
-        <p class="hint">Showing first 100 of {{ urls | length }} URLs</p>
+        {% if urls | length > 20 %}
+        <p class="hint">Showing first 20 of {{ urls | length }} URLs</p>
         {% endif %}
     </details>
 </div>
@@ -182,44 +207,30 @@
 
 {% if emails %}
 <div class="section">
-    <h2>Extracted Emails ({{ total_emails }} total)</h2>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Email</th>
-                <th>Domain</th>
-                <th>Source</th>
-                <th>Niche</th>
-                <th>City</th>
-                <th>Verification</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for e in emails %}
-            <tr>
-                <td>{{ e.email }}</td>
-                <td>{{ e.domain }}</td>
-                <td><a href="{{ e.source_url }}" target="_blank" rel="noopener">{{ e.source_domain }}</a></td>
-                <td>{{ e.niche }}</td>
-                <td>{{ e.city }}</td>
-                <td>
-                    <span class="badge badge-{{ e.verification }}">{{ e.verification }}</span>
-                    {% if e.verification_method and e.verification_method != 'pending' %}
-                    <span class="email-meta">
-                        {{ e.verification_method }}
-                        {% if e.mailbox_confidence and e.mailbox_confidence != 'unknown' %} · mailbox {{ e.mailbox_confidence }}{% endif %}
-                        {% if e.domain_confidence and e.domain_confidence != 'unknown' %} · domain {{ e.domain_confidence }}{% endif %}
-                        {% if e.is_catch_all %} · catch-all{% endif %}
-                    </span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% if total_emails > 50 %}
-    <p><a href="/emails?campaign_id={{ campaign.id }}">View all {{ total_emails }} emails &rarr;</a></p>
-    {% endif %}
+    <details>
+        <summary><h2 class="inline">Extracted Emails ({{ total_emails }} total)</h2></summary>
+        <table class="table table-sm table-compact">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Source</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in emails[:20] %}
+                <tr>
+                    <td>{{ e.email }}</td>
+                    <td>{{ e.source_domain }}</td>
+                    <td><span class="badge badge-{{ e.verification }}">{{ e.verification }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if total_emails > 20 %}
+        <p class="hint">Showing first 20 of {{ total_emails }} — <a href="/emails?campaign_id={{ campaign.id }}">View all &rarr;</a></p>
+        {% endif %}
+    </details>
 </div>
 {% endif %}
 {% endblock %}
