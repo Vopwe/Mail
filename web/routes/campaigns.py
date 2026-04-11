@@ -54,9 +54,11 @@ def detail(campaign_id):
 
     urls = database.get_urls(campaign_id)
     emails_list, total_emails = database.get_emails(campaign_id=campaign_id, per_page=50)
+    crawl_stats = database.get_campaign_stats(campaign_id)
     return render_template("campaigns/detail.html",
                            campaign=campaign, urls=urls,
-                           emails=emails_list, total_emails=total_emails)
+                           emails=emails_list, total_emails=total_emails,
+                           crawl_stats=crawl_stats)
 
 
 @bp.route("/<int:campaign_id>/run", methods=["POST"])

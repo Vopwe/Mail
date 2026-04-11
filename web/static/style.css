@@ -325,6 +325,31 @@ a:hover {
     color: var(--danger);
 }
 
+.stat-sub {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* ─── Health Warnings ─────────────────────────────────────────────── */
+.health-warnings {
+    margin-top: 16px;
+}
+
+.health-warn {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #92400E;
+    margin-bottom: 8px;
+}
+
+.health-warn strong {
+    color: #78350F;
+}
+
 /* ─── Tables ───────────────────────────────────────────────────────── */
 .table {
     width: 100%;

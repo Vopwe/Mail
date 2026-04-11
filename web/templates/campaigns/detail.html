@@ -66,6 +66,77 @@
     </div>
 </div>
 
+{% if crawl_stats %}
+<!-- ─── Crawl Health Monitor ──────────────────────────── -->
+<div class="section">
+    <h2>Crawl Health</h2>
+    <div class="stats-grid stats-grid-sm">
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.domains_reachable }}<span class="stat-sub">/{{ crawl_stats.domains_total }}</span></div>
+            <div class="stat-label">Domains Reachable</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.pages_fetched }}</div>
+            <div class="stat-label">Pages Fetched</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number {% if crawl_stats.pages_failed > crawl_stats.pages_fetched * 0.3 %}stat-danger{% endif %}">{{ crawl_stats.pages_failed }}</div>
+            <div class="stat-label">Pages Failed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.pages_discovered }}</div>
+            <div class="stat-label">Pages Discovered</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.domains_with_emails }}</div>
+            <div class="stat-label">Domains with Emails</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number {% if crawl_stats.domains_without_emails > crawl_stats.domains_with_emails %}stat-danger{% endif %}">{{ crawl_stats.domains_without_emails }}</div>
+            <div class="stat-label">Domains without Emails</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.emails_per_domain }}</div>
+            <div class="stat-label">Emails per Domain</div>
+        </div>
+        {% if crawl_stats.pages_robots_blocked > 0 %}
+        <div class="stat-card">
+            <div class="stat-number stat-danger">{{ crawl_stats.pages_robots_blocked }}</div>
+            <div class="stat-label">Blocked by robots.txt</div>
+        </div>
+        {% endif %}
+        {% if crawl_stats.deduped_domains > 0 %}
+        <div class="stat-card">
+            <div class="stat-number">{{ crawl_stats.deduped_domains }}</div>
+            <div class="stat-label">Deduped Domains</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% set reach_pct = (crawl_stats.domains_reachable / crawl_stats.domains_total * 100) | round if crawl_stats.domains_total > 0 else 0 %}
+    {% set email_pct = (crawl_stats.domains_with_emails / crawl_stats.domains_reachable * 100) | round if crawl_stats.domains_reachable > 0 else 0 %}
+    {% if reach_pct < 50 or email_pct < 20 %}
+    <div class="health-warnings">
+        {% if reach_pct < 50 %}
+        <div class="health-warn">
+            <strong>Low reachability ({{ reach_pct }}%):</strong> Many domains unreachable. AI may be generating non-existent URLs. Try increasing request timeout or using a different AI model.
+        </div>
+        {% endif %}
+        {% if email_pct < 20 %}
+        <div class="health-warn">
+            <strong>Low email yield ({{ email_pct }}% of reachable domains):</strong>
+            {% if crawl_stats.pages_robots_blocked > 10 %}
+            robots.txt is blocking {{ crawl_stats.pages_robots_blocked }} pages — consider switching to "Soft" or "Off" mode in Settings.
+            {% else %}
+            Target domains may not list emails publicly. Try different niches or increase max pages per domain.
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if urls %}
 <div class="section">
     <details>

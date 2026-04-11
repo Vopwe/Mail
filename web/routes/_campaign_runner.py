@@ -115,14 +115,15 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
                 )
 
     # Cross-campaign domain dedup: remove URLs already crawled elsewhere
+    deduped_count = 0
     if all_url_rows:
         existing_domains = database.get_existing_domains(exclude_campaign_id=campaign_id)
         before = len(all_url_rows)
         all_url_rows = [r for r in all_url_rows if r["domain"] not in existing_domains]
-        deduped = before - len(all_url_rows)
-        if deduped:
-            logger.info(f"Cross-campaign dedup: removed {deduped} duplicate domains")
-            tasks.update_task(task_id, message=f"Removed {deduped} duplicate domains from other campaigns")
+        deduped_count = before - len(all_url_rows)
+        if deduped_count:
+            logger.info(f"Cross-campaign dedup: removed {deduped_count} duplicate domains")
+            tasks.update_task(task_id, message=f"Removed {deduped_count} duplicate domains from other campaigns")
 
     if all_url_rows:
         database.insert_urls(all_url_rows)
@@ -141,10 +142,12 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
         tasks.update_task(task_id, progress=done, total=total,
                           message=f"Crawled {done}/{total} domains")
 
-    crawl_results = await crawl_urls(pending_urls, on_progress=on_crawl_progress)
+    crawl_results, crawl_stats = await crawl_urls(pending_urls, on_progress=on_crawl_progress)
 
     tasks.update_task(task_id, message="Extracting emails...")
     total_extracted = 0
+    domains_with_emails = 0
+    domains_without_emails = 0
 
     for url_record in pending_urls:
         url_id = url_record["id"]
@@ -165,9 +168,35 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
             if email_rows:
                 database.insert_emails_bulk(email_rows)
                 total_extracted += len(email_rows)
+                domains_with_emails += 1
+            else:
+                domains_without_emails += 1
         else:
             database.update_url_status(url_id, "failed", error="No pages fetched")
+            domains_without_emails += 1
 
+    # Save crawl stats to campaign
+    crawl_stats["domains_with_emails"] = domains_with_emails
+    crawl_stats["domains_without_emails"] = domains_without_emails
+    crawl_stats["total_emails_extracted"] = total_extracted
+    if crawl_stats["domains_reachable"] > 0:
+        crawl_stats["emails_per_domain"] = round(total_extracted / crawl_stats["domains_reachable"], 2)
+    else:
+        crawl_stats["emails_per_domain"] = 0
+    crawl_stats["deduped_domains"] = deduped_count
+
+    database.save_campaign_stats(campaign_id, crawl_stats)
     database.update_campaign_counts(campaign_id)
     database.update_campaign_status(campaign_id, "done")
-    tasks.complete_task(task_id, f"Done! Extracted {total_extracted} emails from {len(pending_urls)} URLs.")
+
+    # Build detailed completion message
+    msg = (
+        f"Done! {total_extracted} emails from {len(pending_urls)} URLs. "
+        f"Reachable: {crawl_stats['domains_reachable']}/{crawl_stats['domains_total']} | "
+        f"Pages: {crawl_stats['pages_fetched']} fetched, {crawl_stats['pages_failed']} failed | "
+        f"Domains with emails: {domains_with_emails}"
+    )
+    if crawl_stats['pages_robots_blocked'] > 0:
+        msg += f" | robots.txt blocked: {crawl_stats['pages_robots_blocked']}"
+
+    tasks.complete_task(task_id, msg)

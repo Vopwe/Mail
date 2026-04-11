@@ -24,6 +24,7 @@ def index():
             "max_pages_per_domain": int(request.form.get("max_pages_per_domain", 5)),
             "urls_per_batch": int(request.form.get("urls_per_batch", 20)),
             "verify_timeout": int(request.form.get("verify_timeout", 10)),
+            "robots_txt_mode": request.form.get("robots_txt_mode", "soft").strip(),
         }
         config.save_settings(updates)
 

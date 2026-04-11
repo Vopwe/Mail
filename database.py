@@ -197,6 +197,38 @@ def delete_campaign(campaign_id: int):
         db.execute("DELETE FROM campaigns WHERE id = ?", (campaign_id,))
 
 
+def save_campaign_stats(campaign_id: int, stats: dict):
+    """Save crawl stats JSON to campaign record."""
+    _ensure_campaigns_stats_column()
+    with _write_db() as db:
+        db.execute(
+            "UPDATE campaigns SET crawl_stats = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(stats), campaign_id),
+        )
+
+
+def get_campaign_stats(campaign_id: int) -> dict | None:
+    """Load crawl stats JSON from campaign record."""
+    _ensure_campaigns_stats_column()
+    db = get_db()
+    row = db.execute("SELECT crawl_stats FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+    if row and row["crawl_stats"]:
+        try:
+            return json.loads(row["crawl_stats"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return None
+
+
+def _ensure_campaigns_stats_column():
+    """Add crawl_stats column if it doesn't exist."""
+    db = get_db()
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(campaigns)").fetchall()}
+    if "crawl_stats" not in columns:
+        with _write_db() as wdb:
+            wdb.execute("ALTER TABLE campaigns ADD COLUMN crawl_stats TEXT")
+
+
 # ── URL CRUD ──────────────────────────────────────────────────────────
 
 def insert_urls(rows: list[dict]):
