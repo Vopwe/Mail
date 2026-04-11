@@ -2,12 +2,15 @@
 Configuration — API keys, model settings, crawl behavior.
 Supports runtime overrides via settings.json.
 """
-import os
 import json
+import os
+import secrets
+import time
 
 # ─── Paths ────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
+SECRET_KEY_PATH = os.path.join(BASE_DIR, ".flask_secret_key")
 DATABASE_PATH = os.getenv("EMAIL_DB_PATH", os.path.join(BASE_DIR, "emails.db"))
 LOCATIONS_PATH = os.path.join(BASE_DIR, "data", "locations.json")
 DISPOSABLE_PATH = os.path.join(BASE_DIR, "data", "disposable_domains.txt")
@@ -108,6 +111,60 @@ def save_settings(updates: dict):
     settings.update(updates)
     with open(SETTINGS_PATH, "w") as f:
         json.dump(settings, f, indent=2)
+
+
+def _read_secret_key() -> str | None:
+    try:
+        with open(SECRET_KEY_PATH, "r", encoding="utf-8") as f:
+            secret = f.read().strip()
+            return secret or None
+    except FileNotFoundError:
+        return None
+
+
+def get_secret_key() -> str:
+    """
+    Return a stable Flask secret key shared across all app workers.
+
+    APP_SECRET_KEY / FLASK_SECRET_KEY can override the on-disk key for deployments
+    that prefer environment-based secrets.
+    """
+    env_secret = os.getenv("APP_SECRET_KEY") or os.getenv("FLASK_SECRET_KEY")
+    if env_secret:
+        return env_secret
+
+    lock_path = f"{SECRET_KEY_PATH}.lock"
+
+    existing_secret = _read_secret_key()
+    if existing_secret:
+        return existing_secret
+
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        for _ in range(50):
+            existing_secret = _read_secret_key()
+            if existing_secret:
+                return existing_secret
+            time.sleep(0.1)
+        raise RuntimeError(f"Timed out waiting for secret key: {SECRET_KEY_PATH}")
+
+    try:
+        existing_secret = _read_secret_key()
+        if existing_secret:
+            return existing_secret
+
+        secret = secrets.token_hex(32)
+        fd = os.open(SECRET_KEY_PATH, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(secret)
+        return secret
+    finally:
+        os.close(lock_fd)
+        try:
+            os.unlink(lock_path)
+        except (FileNotFoundError, PermissionError):
+            pass
 
 
 def get_all_settings() -> dict:

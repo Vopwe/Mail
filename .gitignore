@@ -8,7 +8,11 @@ __pycache__/
 *.sqlite-journal
 *.sqlite3
 .test-db-*
+.test-config/
+.auth-check-*/
 settings.json
+.flask_secret_key
+.flask_secret_key.lock
 .env
 venv/
 .venv/

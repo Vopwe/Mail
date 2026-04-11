@@ -1,7 +1,9 @@
 import asyncio
 import csv
 import io
+import os
 import sqlite3
+import shutil
 import threading
 import unittest
 from contextlib import contextmanager
@@ -31,8 +33,27 @@ def isolated_db():
         config.DATABASE_PATH = original_path
 
 
+@contextmanager
+def isolated_config_paths():
+    original_settings_path = config.SETTINGS_PATH
+    original_secret_key_path = config.SECRET_KEY_PATH
+
+    temp_dir = os.path.join(config.BASE_DIR, ".test-config", uuid.uuid4().hex)
+    os.makedirs(temp_dir, exist_ok=True)
+    config.SETTINGS_PATH = os.path.join(temp_dir, "settings.json")
+    config.SECRET_KEY_PATH = os.path.join(temp_dir, ".flask_secret_key")
+    try:
+        yield
+    finally:
+        config.SETTINGS_PATH = original_settings_path
+        config.SECRET_KEY_PATH = original_secret_key_path
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 class RegressionTests(unittest.TestCase):
     def setUp(self):
+        self._config_context = isolated_config_paths()
+        self._config_context.__enter__()
         self._db_context = isolated_db()
         self._db_context.__enter__()
         tasks._tasks.clear()
@@ -40,6 +61,7 @@ class RegressionTests(unittest.TestCase):
     def tearDown(self):
         tasks._tasks.clear()
         self._db_context.__exit__(None, None, None)
+        self._config_context.__exit__(None, None, None)
 
     def test_get_db_is_thread_local(self):
         main_conn = database.get_db()
@@ -157,6 +179,33 @@ class RegressionTests(unittest.TestCase):
             ["Email", "Verification Method", "Mailbox Confidence", "Domain Confidence", "Catch-All"],
         )
         self.assertEqual(rows[1], ["user@example.com", "dns_provider", "unknown", "high", "0"])
+
+    def test_login_session_survives_across_app_instances(self):
+        config.save_settings({"app_password": "letmein", "app_password_hash": ""})
+
+        app_one = create_app()
+        app_one.testing = True
+        client_one = app_one.test_client()
+
+        login_response = client_one.post("/login", data={"password": "letmein"})
+        self.assertEqual(login_response.status_code, 302)
+
+        session_cookie = client_one.get_cookie(app_one.config["SESSION_COOKIE_NAME"])
+        self.assertIsNotNone(session_cookie)
+
+        app_two = create_app()
+        app_two.testing = True
+        client_two = app_two.test_client()
+        client_two.set_cookie(
+            key=session_cookie.key,
+            value=session_cookie.value,
+            domain=session_cookie.domain or "localhost",
+            path=session_cookie.path or "/",
+        )
+
+        response = client_two.get("/", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 """
 Flask app factory.
 """
-import secrets
 from flask import Flask
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import config
 import database
 
 
@@ -14,7 +14,7 @@ def create_app() -> Flask:
         static_folder="static",
         template_folder="templates",
     )
-    app.secret_key = secrets.token_hex(32)
+    app.secret_key = config.get_secret_key()
 
     database.init_db()
 
