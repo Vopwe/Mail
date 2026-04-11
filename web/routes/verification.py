@@ -1,8 +1,11 @@
 """
 Verification — trigger bulk verification from the UI.
 Handles: verify selected, verify by campaign, verify all, re-verify unknown.
+Tracks detailed verification stats for health monitoring.
 """
+import json
 import logging
+from datetime import datetime
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 import database
@@ -30,6 +33,7 @@ async def _run_verification(task_id: str, email_ids: list[int] | None,
                             include_all: bool = False):
     """Background verification task — no artificial limit."""
     clear_mx_cache()
+    start_time = datetime.now()
 
     if email_ids:
         emails = database.get_emails_by_ids(email_ids)
@@ -58,7 +62,7 @@ async def _run_verification(task_id: str, email_ids: list[int] | None,
                      f"{counts['risky']} risky, {trap} traps, {counts['unknown']} unknown"),
         )
 
-    results = await verify_emails_batch(emails, on_progress=on_progress)
+    results, vstats = await verify_emails_batch(emails, on_progress=on_progress)
 
     # Batch update database
     for r in results:
@@ -73,11 +77,19 @@ async def _run_verification(task_id: str, email_ids: list[int] | None,
             is_catch_all=r["is_catch_all"],
         )
 
-    valid = sum(1 for r in results if r["verification"] == "valid")
-    invalid = sum(1 for r in results if r["verification"] == "invalid")
-    risky = sum(1 for r in results if r["verification"] == "risky")
-    traps = sum(1 for r in results if r["verification"] == "spam_trap")
-    unknown = len(results) - valid - invalid - risky - traps
+    # Save verification stats
+    end_time = datetime.now()
+    vstats["started_at"] = start_time.isoformat()
+    vstats["completed_at"] = end_time.isoformat()
+    vstats["duration_seconds"] = round((end_time - start_time).total_seconds(), 1)
+    vstats["campaign_id"] = campaign_id
+    database.save_verification_stats(vstats)
+
+    valid = vstats["result_valid"]
+    invalid = vstats["result_invalid"]
+    risky = vstats["result_risky"]
+    traps = vstats["result_spam_trap"]
+    unknown = vstats["result_unknown"]
     tasks.complete_task(
         task_id,
         f"Done! {total} emails: {valid} valid, {invalid} invalid, {risky} risky, {traps} traps, {unknown} unknown"
@@ -132,9 +144,11 @@ def index():
         return _redirect_with_task(referrer, task_id)
 
     stats = database.get_stats()
+    verify_history = database.get_verification_stats(limit=5)
     return render_template(
         "verification.html",
         campaigns=campaigns,
         stats=stats,
         task_id=current_task_id,
+        verify_history=verify_history,
     )

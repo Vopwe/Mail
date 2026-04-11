@@ -350,6 +350,45 @@ a:hover {
     color: #78350F;
 }
 
+/* ─── Verification Health ─────────────────────────────────────────── */
+.verify-health-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.verify-health-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.verify-health-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.verify-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.stat-card-sm {
+    padding: 12px;
+}
+
+.stat-card-sm .stat-number {
+    font-size: 22px;
+}
+
+.stat-card-sm .stat-label {
+    font-size: 11px;
+}
+
 /* ─── Tables ───────────────────────────────────────────────────────── */
 .table {
     width: 100%;
@@ -845,6 +884,10 @@ details summary:hover {
     }
 
     .charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .verify-health-grid {
         grid-template-columns: 1fr;
     }
 

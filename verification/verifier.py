@@ -600,19 +600,64 @@ async def verify_email(email: str, smtp_result_override: str | None = None) -> d
     return result
 
 
-async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict]:
+def _new_verify_stats() -> dict:
+    """Template for verification run statistics."""
+    return {
+        "total": 0,
+        "smtp_available": None,
+        # Result counts
+        "result_valid": 0,
+        "result_invalid": 0,
+        "result_risky": 0,
+        "result_spam_trap": 0,
+        "result_unknown": 0,
+        # Method counts (how the decision was made)
+        "method_syntax": 0,
+        "method_disposable": 0,
+        "method_spam_trap": 0,
+        "method_risky_local": 0,
+        "method_public_provider": 0,
+        "method_dns_no_mx": 0,
+        "method_smtp": 0,
+        "method_smtp_catch_all": 0,
+        "method_dns_business_mx": 0,
+        "method_dns_domain": 0,
+        "method_dns_mx_only": 0,
+        # SMTP stats
+        "smtp_checked": 0,
+        "smtp_valid": 0,
+        "smtp_invalid": 0,
+        "smtp_unknown": 0,
+        "smtp_catch_all_domains": 0,
+        # Domain stats
+        "unique_domains": 0,
+        "unique_mx_hosts": 0,
+        "public_provider_count": 0,
+        "no_mx_count": 0,
+    }
+
+
+async def verify_emails_batch(emails: list[dict], on_progress=None) -> tuple[list[dict], dict]:
     """
     Verify a batch of email records using grouped batch SMTP checks.
     Groups emails by MX host for connection reuse, then verifies in parallel.
+    Returns (results, verify_stats).
     """
     concurrency = int(config.get_setting("verify_concurrency", config.VERIFY_CONCURRENCY))
     results = []
     counter = {"done": 0, "valid": 0, "invalid": 0, "risky": 0, "spam_trap": 0, "unknown": 0}
     total = len(emails)
     lock = asyncio.Lock()
+    vstats = _new_verify_stats()
+    vstats["total"] = total
 
     # Pre-test SMTP availability
     smtp_ok = await _test_smtp_availability()
+    vstats["smtp_available"] = smtp_ok
+
+    # Track unique domains/mx hosts
+    seen_domains = set()
+    seen_mx_hosts = set()
 
     # ── Phase 1: Pre-filter (syntax, disposable, spam trap, MX) ──────
     # These don't need SMTP at all
@@ -627,6 +672,8 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["mailbox_confidence"] = "low"
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_syntax"] += 1
+            vstats["result_invalid"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["invalid"] += 1
@@ -635,6 +682,7 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             continue
 
         domain = email.split("@")[1]
+        seen_domains.add(domain)
 
         if check_disposable(domain):
             r["verification"] = "risky"
@@ -642,6 +690,8 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["domain_confidence"] = "low"
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_disposable"] += 1
+            vstats["result_risky"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["risky"] += 1
@@ -656,6 +706,8 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["mailbox_confidence"] = "low"
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_spam_trap"] += 1
+            vstats["result_spam_trap"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["spam_trap"] += 1
@@ -668,6 +720,8 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["mailbox_confidence"] = "low"
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_risky_local"] += 1
+            vstats["result_risky"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["risky"] += 1
@@ -684,6 +738,9 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["mx_valid"] = 1
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_public_provider"] += 1
+            vstats["public_provider_count"] += 1
+            vstats["result_valid"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["valid"] += 1
@@ -699,6 +756,9 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
             r["domain_confidence"] = "low"
             r["id"] = record["id"]
             results.append(r)
+            vstats["method_dns_no_mx"] += 1
+            vstats["no_mx_count"] += 1
+            vstats["result_invalid"] += 1
             async with lock:
                 counter["done"] += 1
                 counter["invalid"] += 1
@@ -706,10 +766,14 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
                     on_progress(counter["done"], total, counter)
             continue
 
+        if mx_host:
+            seen_mx_hosts.add(mx_host)
         smtp_needed.append({"record": record, "domain": domain, "mx_host": mx_host})
 
     if not smtp_needed:
-        return results
+        vstats["unique_domains"] = len(seen_domains)
+        vstats["unique_mx_hosts"] = len(seen_mx_hosts)
+        return results, vstats
 
     # ── Phase 2: SMTP verification (grouped by MX host) ─────────────
     if smtp_ok:
@@ -759,17 +823,35 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
                     async with lock:
                         results.append(r)
                         counter["done"] += 1
+                        # Track verification stats
+                        vstats["smtp_checked"] += 1
+                        if smtp_result == "valid":
+                            vstats["smtp_valid"] += 1
+                        elif smtp_result == "invalid":
+                            vstats["smtp_invalid"] += 1
+                        else:
+                            vstats["smtp_unknown"] += 1
+                        method_key = f"method_{r['verification_method']}"
+                        if method_key in vstats:
+                            vstats[method_key] += 1
+                        if r.get("is_catch_all"):
+                            vstats["smtp_catch_all_domains"] += 1
                         v = r["verification"]
                         if v == "valid":
                             counter["valid"] += 1
+                            vstats["result_valid"] += 1
                         elif v == "invalid":
                             counter["invalid"] += 1
+                            vstats["result_invalid"] += 1
                         elif v == "risky":
                             counter["risky"] += 1
+                            vstats["result_risky"] += 1
                         elif v == "spam_trap":
                             counter["spam_trap"] += 1
+                            vstats["result_spam_trap"] += 1
                         else:
                             counter["unknown"] += 1
+                            vstats["result_unknown"] += 1
                         if on_progress:
                             on_progress(counter["done"], total, counter)
 
@@ -784,22 +866,31 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> list[dict
         for item in smtp_needed:
             r = _dns_based_verify(item["record"]["email"], item["domain"], item["mx_host"])
             r["id"] = item["record"]["id"]
+            method_key = f"method_{r['verification_method']}"
+            if method_key in vstats:
+                vstats[method_key] += 1
             async with lock:
                 results.append(r)
                 counter["done"] += 1
                 v = r["verification"]
                 if v == "valid":
                     counter["valid"] += 1
+                    vstats["result_valid"] += 1
                 elif v == "invalid":
                     counter["invalid"] += 1
+                    vstats["result_invalid"] += 1
                 elif v == "risky":
                     counter["risky"] += 1
+                    vstats["result_risky"] += 1
                 else:
                     counter["unknown"] += 1
+                    vstats["result_unknown"] += 1
                 if on_progress:
                     on_progress(counter["done"], total, counter)
 
-    return results
+    vstats["unique_domains"] = len(seen_domains)
+    vstats["unique_mx_hosts"] = len(seen_mx_hosts)
+    return results, vstats
 
 
 def clear_mx_cache():

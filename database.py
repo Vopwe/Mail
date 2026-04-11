@@ -88,6 +88,12 @@ def _ensure_email_columns(db: sqlite3.Connection):
 def init_db():
     with _write_db() as db:
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS verification_runs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            stats       TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS campaigns (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT NOT NULL,
@@ -444,6 +450,40 @@ def get_stats() -> dict:
         "unverified_emails": db.execute("SELECT COUNT(*) FROM emails WHERE verification = 'unverified'").fetchone()[0],
         "total_urls": db.execute("SELECT COUNT(*) FROM urls").fetchone()[0],
     }
+
+
+# ── Verification Stats ────────────────────────────────────────────────
+
+def save_verification_stats(stats: dict):
+    """Save a verification run's stats."""
+    with _write_db() as db:
+        db.execute(
+            "INSERT INTO verification_runs (stats) VALUES (?)",
+            (json.dumps(stats),),
+        )
+
+
+def get_verification_stats(limit: int = 5) -> list[dict]:
+    """Get recent verification run stats."""
+    db = get_db()
+    # Check if table exists
+    table_check = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='verification_runs'"
+    ).fetchone()
+    if not table_check:
+        return []
+    rows = db.execute(
+        "SELECT * FROM verification_runs ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    results = []
+    for row in rows:
+        data = dict(row)
+        try:
+            data["stats"] = json.loads(data["stats"])
+        except (json.JSONDecodeError, TypeError):
+            data["stats"] = {}
+        results.append(data)
+    return results
 
 
 def get_distinct_values(column: str) -> list[str]:
