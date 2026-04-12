@@ -42,19 +42,20 @@
                 </svg>
                 <span>Campaigns</span>
             </a>
-            <a href="/emails" class="sidebar-link {% if '/emails' in request.path %}active{% endif %}" id="nav-emails">
-                <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                </svg>
-                <span>Emails</span>
-            </a>
             <a href="/verification" class="sidebar-link {% if '/verification' in request.path %}active{% endif %}" id="nav-verification">
                 <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 22S20 18 20 12V5L12 2L4 5V12C4 18 12 22 12 22Z"/>
                     <polyline points="9,12 11,14 15,10"/>
                 </svg>
                 <span>Verification</span>
+            </a>
+            <a href="/emails" class="sidebar-link {% if '/emails' in request.path %}active{% endif %}" id="nav-emails">
+                <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                    <path d="M21 12C21 13.66 16.97 15 12 15C7.03 15 3 13.66 3 12"/>
+                    <path d="M3 5V19C3 20.66 7.03 22 12 22C16.97 22 21 20.66 21 19V5"/>
+                </svg>
+                <span>Database</span>
             </a>
             <a href="/settings" class="sidebar-link {% if '/settings' in request.path %}active{% endif %}" id="nav-settings">
                 <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

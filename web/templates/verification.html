@@ -60,18 +60,6 @@
     </div>
 </div>
 
-<div class="section">
-    <h2>Clean Up</h2>
-    <div class="verify-actions">
-        <form method="post" action="/verification/bulk-delete" class="verify-action-row" id="bulk-delete-form"
-              onsubmit="return confirm('Permanently delete all emails with selected statuses?')">
-            <label class="checkbox-label"><input type="checkbox" name="statuses" value="invalid"> Invalid</label>
-            <label class="checkbox-label"><input type="checkbox" name="statuses" value="spam_trap"> Spam Traps</label>
-            <button type="submit" class="btn btn-danger btn-sm">Delete Selected</button>
-        </form>
-    </div>
-</div>
-
 <!-- ─── Verification Health Monitor ──────────────────────────── -->
 {% if verify_history %}
 <div class="section">

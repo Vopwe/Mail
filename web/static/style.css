@@ -470,6 +470,17 @@ a:hover {
     background: var(--bg);
 }
 
+.toggle-arrow {
+    float: right;
+    transition: transform 0.2s;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.export-panel[open] .toggle-arrow {
+    transform: rotate(180deg);
+}
+
 .export-panel[open] .export-panel-toggle {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;

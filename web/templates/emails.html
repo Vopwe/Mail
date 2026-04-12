@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Email Database — GraphenMail{% endblock %}
+{% block title %}Database — GraphenMail{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Email Database <span class="count">({{ total }})</span></h1>
+        <h1>Database <span class="count">({{ total }})</span></h1>
         {% if filters.get('campaign_id') %}
         <a href="/campaigns/{{ filters.get('campaign_id') }}" class="btn btn-sm" style="margin-top: 4px;">&larr; Back to Campaign</a>
         {% endif %}
@@ -63,9 +63,23 @@
     </form>
 </div>
 
+<!-- Clean Up -->
+<details class="export-panel">
+    <summary class="export-panel-toggle">Clean Up <span class="toggle-arrow">&#9662;</span></summary>
+    <div class="export-panel-body">
+        <form method="post" action="/verification/bulk-delete" class="verify-action-row"
+              onsubmit="return confirm('Permanently delete all emails with selected statuses?')">
+            <label class="checkbox-label"><input type="checkbox" name="statuses" value="invalid"> Invalid</label>
+            <label class="checkbox-label"><input type="checkbox" name="statuses" value="spam_trap"> Spam Traps</label>
+            <label class="checkbox-label"><input type="checkbox" name="statuses" value="unknown"> Unknown</label>
+            <button type="submit" class="btn btn-danger btn-sm">Delete Selected</button>
+        </form>
+    </div>
+</details>
+
 <!-- Export Options -->
 <details class="export-panel">
-    <summary class="export-panel-toggle">Export Settings</summary>
+    <summary class="export-panel-toggle">Export Settings <span class="toggle-arrow">&#9662;</span></summary>
     <div class="export-panel-body">
         <div class="verify-health-grid">
             <div class="verify-health-card">
