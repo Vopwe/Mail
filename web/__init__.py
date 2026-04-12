@@ -6,6 +6,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import config
 import database
+import tasks
 
 
 def create_app() -> Flask:
@@ -17,6 +18,7 @@ def create_app() -> Flask:
     app.secret_key = config.get_secret_key()
 
     database.init_db()
+    tasks.init_tasks()
 
     # ── Rate Limiting ────────────────────────────────────────────
     limiter = Limiter(

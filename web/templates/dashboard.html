@@ -78,6 +78,15 @@
     Chart.defaults.font.size = 12;
     Chart.defaults.plugins.legend.labels.boxWidth = 12;
 
+    function showEmpty(canvasId, msg) {
+        const canvas = document.getElementById(canvasId);
+        const ctx = canvas.getContext('2d');
+        ctx.font = '13px Montserrat, sans-serif';
+        ctx.fillStyle = '#94A3B8';
+        ctx.textAlign = 'center';
+        ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    }
+
     // Verification donut
     const vLabels = Object.keys(data.verification);
     const vData = Object.values(data.verification);
@@ -90,7 +99,7 @@
             },
             options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
         });
-    }
+    } else { showEmpty('verificationChart', 'No verification data yet'); }
 
     // Campaign bar
     const cLabels = Object.keys(data.campaigns);
@@ -104,7 +113,7 @@
             },
             options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
         });
-    }
+    } else { showEmpty('campaignChart', 'No campaign data yet'); }
 
     // Niche bar
     const nLabels = Object.keys(data.niches);
@@ -118,7 +127,7 @@
             },
             options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
         });
-    }
+    } else { showEmpty('nicheChart', 'No niche data yet'); }
 
     // Country bar
     const coLabels = Object.keys(data.countries);
@@ -132,7 +141,7 @@
             },
             options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
         });
-    }
+    } else { showEmpty('countryChart', 'No country data yet'); }
 })();
 </script>
 {% endblock %}

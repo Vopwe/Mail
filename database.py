@@ -94,6 +94,19 @@ def init_db():
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS task_status (
+            task_id      TEXT PRIMARY KEY,
+            task_type    TEXT NOT NULL DEFAULT '',
+            campaign_id  INTEGER,
+            status       TEXT NOT NULL DEFAULT 'running',
+            progress     INTEGER DEFAULT 0,
+            total        INTEGER DEFAULT 0,
+            message      TEXT DEFAULT '',
+            error        TEXT DEFAULT '',
+            started_at   TEXT DEFAULT '',
+            completed_at TEXT DEFAULT ''
+        );
+
         CREATE TABLE IF NOT EXISTS campaigns (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT NOT NULL,
@@ -484,6 +497,65 @@ def get_verification_stats(limit: int = 5) -> list[dict]:
             data["stats"] = {}
         results.append(data)
     return results
+
+
+# ── Task Persistence ─────────────────────────────────────────────────
+
+def upsert_task(task_id: str, task_type: str = "", campaign_id: int | None = None,
+                status: str = "running", progress: int = 0, total: int = 0,
+                message: str = "", error: str = "", started_at: str = "",
+                completed_at: str = ""):
+    with _write_db() as db:
+        db.execute(
+            """INSERT INTO task_status
+               (task_id, task_type, campaign_id, status, progress, total, message, error, started_at, completed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(task_id) DO UPDATE SET
+                 status=excluded.status, progress=excluded.progress, total=excluded.total,
+                 message=excluded.message, error=excluded.error, completed_at=excluded.completed_at""",
+            (task_id, task_type, campaign_id, status, progress, total, message, error, started_at, completed_at),
+        )
+
+
+def get_db_task(task_id: str) -> dict | None:
+    row = get_db().execute("SELECT * FROM task_status WHERE task_id = ?", (task_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_db_tasks() -> list[dict]:
+    rows = get_db().execute(
+        "SELECT * FROM task_status ORDER BY started_at DESC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_old_tasks(keep: int = 50):
+    """Keep only the most recent `keep` tasks."""
+    with _write_db() as db:
+        db.execute(
+            """DELETE FROM task_status WHERE task_id NOT IN (
+                 SELECT task_id FROM task_status ORDER BY started_at DESC LIMIT ?
+               )""",
+            (keep,),
+        )
+
+
+def bulk_delete_emails(verification_statuses: list[str]) -> int:
+    """Delete emails matching given verification statuses. Returns count deleted."""
+    if not verification_statuses:
+        return 0
+    placeholders = ",".join("?" for _ in verification_statuses)
+    db = get_db()
+    count = db.execute(
+        f"SELECT COUNT(*) FROM emails WHERE verification IN ({placeholders})",
+        verification_statuses,
+    ).fetchone()[0]
+    with _write_db() as wdb:
+        wdb.execute(
+            f"DELETE FROM emails WHERE verification IN ({placeholders})",
+            verification_statuses,
+        )
+    return count
 
 
 def get_distinct_values(column: str) -> list[str]:

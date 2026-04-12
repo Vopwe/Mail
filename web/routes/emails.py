@@ -36,6 +36,11 @@ def list_emails():
 
     total_pages = (total + 49) // 50
     campaigns = database.get_campaigns()
+    campaign_map = {c["id"]: c["name"] for c in campaigns}
+
+    # Attach campaign name to each email row
+    for e in emails_list:
+        e["campaign_name"] = campaign_map.get(e.get("campaign_id"), "-")
 
     # Get distinct values for filter dropdowns
     niches = database.get_distinct_values("niche")

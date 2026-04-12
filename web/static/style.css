@@ -897,6 +897,97 @@ details summary:hover {
     color: var(--orange);
 }
 
+/* ─── Settings Tabs ───────────────────────────────────────────────── */
+.settings-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 20px;
+}
+
+.settings-tab {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab:hover {
+    color: var(--text);
+}
+
+.settings-tab.active {
+    color: var(--orange);
+    border-bottom-color: var(--orange);
+}
+
+.settings-panel {
+    display: none;
+}
+
+.settings-panel.active {
+    display: block;
+}
+
+/* ─── Campaign Search Bar ─────────────────────────────────────────── */
+.campaign-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.campaign-filters input[type="text"],
+.campaign-filters select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    background: var(--white);
+}
+
+.campaign-filters input[type="text"] {
+    min-width: 200px;
+}
+
+.campaign-filters input:focus,
+.campaign-filters select:focus {
+    outline: none;
+    border-color: var(--orange);
+}
+
+/* ─── Export Toast ─────────────────────────────────────────────────── */
+.export-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #065F46;
+    color: #FFFFFF;
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+}
+
+.export-toast.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
 /* ─── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 768px) {
     .sidebar {
@@ -949,5 +1040,52 @@ details summary:hover {
 
     .table {
         font-size: 12px;
+    }
+
+    .col-check {
+        width: 48px;
+    }
+
+    .col-check input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        min-height: 20px;
+    }
+
+    .checkbox-label {
+        padding: 8px 4px;
+        min-height: 44px;
+        align-items: center;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+    }
+
+    .btn-sm {
+        padding: 8px 14px;
+        font-size: 13px;
+        min-height: 44px;
+    }
+
+    .settings-tabs {
+        overflow-x: auto;
+    }
+
+    .settings-tab {
+        padding: 10px 14px;
+        white-space: nowrap;
+    }
+
+    .campaign-filters {
+        flex-direction: column;
+    }
+
+    .campaign-filters input[type="text"],
+    .campaign-filters select {
+        width: 100%;
     }
 }

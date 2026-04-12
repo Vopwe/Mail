@@ -148,6 +148,7 @@
             <tr>
                 <th class="col-check"><input type="checkbox" onchange="toggleAll(this)"></th>
                 <th>Email</th>
+                {% if not filters.get('campaign_id') %}<th>Campaign</th>{% endif %}
                 <th>Niche</th>
                 <th>Location</th>
                 <th>Status</th>
@@ -161,6 +162,7 @@
                     <span class="email-primary">{{ e.email }}</span>
                     <span class="email-meta">{{ e.source_domain }}</span>
                 </td>
+                {% if not filters.get('campaign_id') %}<td>{{ e.campaign_name or '-' }}</td>{% endif %}
                 <td>{{ e.niche or '-' }}</td>
                 <td>{{ e.city or '' }}{% if e.city and e.country %}, {% endif %}{{ e.country or '-' }}</td>
                 <td>
@@ -205,26 +207,36 @@ function toggleAll(source) {
 }
 
 function doExport() {
-    // Build columns list
     const cols = [];
     document.querySelectorAll('.export-col:checked').forEach(cb => cols.push(cb.value));
-    // Always include email
     if (!cols.includes('email')) cols.unshift('email');
 
-    // Build exclude list
     const excludeDomains = [];
     document.querySelectorAll('.exclude-provider:checked').forEach(cb => {
         excludeDomains.push(...cb.value.split(','));
     });
 
-    // Build URL from current filters
     const params = new URLSearchParams(window.location.search);
     params.set('columns', cols.join(','));
     if (excludeDomains.length > 0) {
         params.set('exclude_providers', excludeDomains.join(','));
     }
 
-    window.location.href = '/emails/export?' + params.toString();
+    const url = '/emails/export?' + params.toString();
+    fetch(url)
+        .then(r => r.blob())
+        .then(blob => {
+            // Count rows (lines minus header)
+            blob.text().then(text => {
+                const count = text.trim().split('\n').length - 1;
+                showExportToast(count);
+            });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'emails_export.csv';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
 }
 
 // Exclude provider select/clear all
@@ -236,5 +248,19 @@ document.getElementById('exclude-none-btn')?.addEventListener('click', () => {
 });
 
 pollVerificationTask();
+
+// Export with feedback toast
+function showExportToast(count) {
+    let toast = document.getElementById('export-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'export-toast';
+        toast.className = 'export-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = `Exported ${count} emails to CSV`;
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 4000);
+}
 </script>
 {% endblock %}

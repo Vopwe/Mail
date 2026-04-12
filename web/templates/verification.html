@@ -42,7 +42,7 @@
     <h2>Verify Emails</h2>
 
     <div class="verify-actions">
-        <form method="post" class="verify-action-row" id="verify-campaign-form">
+        <form method="post" class="verify-action-row" id="verify-form">
             <input type="hidden" name="action" value="verify_campaign" id="verify-action-field">
             <select name="campaign_id" id="verify-campaign-select">
                 <option value="">All campaigns</option>
@@ -50,26 +50,25 @@
                 <option value="{{ c.id }}">{{ c.name }} ({{ c.total_emails }} emails)</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="btn btn-primary" id="verify-btn">Verify Unverified</button>
-            <button type="button" class="btn btn-secondary" id="reverify-btn" title="Re-check unknown + unverified">Re-verify Unknown</button>
-            <button type="button" class="btn btn-danger" id="reverify-all-btn" title="Re-verify ALL emails including already verified">Re-verify All</button>
+            <select id="verify-mode-select">
+                <option value="unverified">Verify Unverified</option>
+                <option value="unknown">Re-verify Unknown</option>
+                <option value="all">Re-verify All</option>
+            </select>
+            <button type="submit" class="btn btn-primary" id="verify-go-btn">Go</button>
         </form>
+    </div>
+</div>
 
-        <div class="verify-action-row verify-all-row">
-            <span class="verify-hint">Global (all campaigns):</span>
-            <form method="post" style="display: inline;">
-                <input type="hidden" name="action" value="verify_all">
-                <button type="submit" class="btn btn-primary">Verify All Unverified</button>
-            </form>
-            <form method="post" style="display: inline; margin-left: 8px;">
-                <input type="hidden" name="action" value="reverify_unknown">
-                <button type="submit" class="btn btn-secondary">Re-verify All Unknown</button>
-            </form>
-            <form method="post" style="display: inline; margin-left: 8px;">
-                <input type="hidden" name="action" value="reverify_all">
-                <button type="submit" class="btn btn-danger">Re-verify Everything</button>
-            </form>
-        </div>
+<div class="section">
+    <h2>Clean Up</h2>
+    <div class="verify-actions">
+        <form method="post" action="/verification/bulk-delete" class="verify-action-row" id="bulk-delete-form"
+              onsubmit="return confirm('Permanently delete all emails with selected statuses?')">
+            <label class="checkbox-label"><input type="checkbox" name="statuses" value="invalid"> Invalid</label>
+            <label class="checkbox-label"><input type="checkbox" name="statuses" value="spam_trap"> Spam Traps</label>
+            <button type="submit" class="btn btn-danger btn-sm">Delete Selected</button>
+        </form>
     </div>
 </div>
 
@@ -254,82 +253,25 @@
 
 {% block scripts %}
 <script>
-document.getElementById('reverify-btn')?.addEventListener('click', function() {
-    const form = document.getElementById('verify-campaign-form');
+document.getElementById('verify-form')?.addEventListener('submit', function(e) {
     const actionField = document.getElementById('verify-action-field');
-    const select = document.getElementById('verify-campaign-select');
-    actionField.value = select.value ? 'reverify_campaign' : 'reverify_unknown';
-    form.submit();
-});
+    const campaign = document.getElementById('verify-campaign-select').value;
+    const mode = document.getElementById('verify-mode-select').value;
 
-document.getElementById('reverify-all-btn')?.addEventListener('click', function() {
-    const select = document.getElementById('verify-campaign-select');
-    const target = select.value ? 'this campaign' : 'ALL campaigns';
-    if (!confirm(`Re-verify ALL emails in ${target}? This re-checks every email including valid/invalid.`)) return;
-    const form = document.getElementById('verify-campaign-form');
-    const actionField = document.getElementById('verify-action-field');
-    actionField.value = select.value ? 'reverify_all_campaign' : 'reverify_all';
-    form.submit();
-});
-
-document.getElementById('verify-campaign-form')?.addEventListener('submit', function() {
-    const actionField = document.getElementById('verify-action-field');
-    const select = document.getElementById('verify-campaign-select');
-    if (actionField.value === 'verify_campaign' && !select.value) {
-        actionField.value = 'verify_all';
+    if (mode === 'unverified') {
+        actionField.value = campaign ? 'verify_campaign' : 'verify_all';
+    } else if (mode === 'unknown') {
+        actionField.value = campaign ? 'reverify_campaign' : 'reverify_unknown';
+    } else if (mode === 'all') {
+        const target = campaign ? 'this campaign' : 'ALL campaigns';
+        if (!confirm(`Re-verify ALL emails in ${target}? This re-checks every email including valid/invalid.`)) {
+            e.preventDefault();
+            return;
+        }
+        actionField.value = campaign ? 'reverify_all_campaign' : 'reverify_all';
     }
 });
 
-// ─── Inline polling — updates the always-visible progress section ───
 pollVerificationTask();
-(function legacyPollerDisabled() { return;
-    const bar = document.getElementById('verify-bar');
-    const txt = document.getElementById('verify-text');
-    const seen = new Set();
-    let hasReloaded = false;
-
-    function poll() {
-        if (hasReloaded) return;
-        fetch('/api/tasks')
-            .then(r => r.json())
-            .then(tasks => {
-                const vt = tasks.filter(t => t.task_type === 'verification');
-                const running = vt.filter(t => t.status === 'running');
-
-                if (running.length > 0) {
-                    const t = running[running.length - 1];
-                    bar.style.width = t.percent + '%';
-                    txt.textContent = t.message || 'Verifying...';
-                    setTimeout(poll, 1500);
-                    return;
-                }
-
-                const completed = vt.filter(t => t.status === 'completed' && !seen.has(t.task_id));
-                if (completed.length > 0) {
-                    const t = completed[completed.length - 1];
-                    bar.style.width = '100%';
-                    txt.textContent = t.message || 'Completed!';
-                    completed.forEach(c => seen.add(c.task_id));
-                    hasReloaded = true;
-                    setTimeout(() => location.reload(), 2000);
-                    return;
-                }
-
-                // Nothing running, nothing new — keep polling for 30s then stop
-                setTimeout(poll, 1500);
-            })
-            .catch(() => setTimeout(poll, 5000));
-    }
-
-    // Seed seen set, then start polling
-    fetch('/api/tasks')
-        .then(r => r.json())
-        .then(tasks => {
-            tasks.filter(t => t.task_type === 'verification' && t.status === 'completed')
-                .forEach(t => seen.add(t.task_id));
-            poll();
-        })
-        .catch(() => poll());
-})();
 </script>
 {% endblock %}

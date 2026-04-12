@@ -8,7 +8,19 @@
 </div>
 
 {% if campaigns %}
-<table class="table">
+<div class="campaign-filters">
+    <input type="text" id="campaign-search" placeholder="Search campaigns..." oninput="filterCampaigns()">
+    <select id="campaign-status-filter" onchange="filterCampaigns()">
+        <option value="">All Statuses</option>
+        <option value="pending">Pending</option>
+        <option value="generating">Generating</option>
+        <option value="crawling">Crawling</option>
+        <option value="done">Done</option>
+        <option value="failed">Failed</option>
+    </select>
+</div>
+
+<table class="table" id="campaigns-table">
     <thead>
         <tr>
             <th>Name</th>
@@ -23,7 +35,7 @@
     </thead>
     <tbody>
         {% for c in campaigns %}
-        <tr>
+        <tr data-name="{{ c.name|lower }}" data-status="{{ c.status }}">
             <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a></td>
             <td>{{ c.niches | join(', ') }}</td>
             <td>{{ c.countries | join(', ') }}</td>
@@ -45,4 +57,18 @@
 {% else %}
 <p class="empty-state">No campaigns yet. <a href="/campaigns/new">Create your first campaign</a> to get started.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterCampaigns() {
+    const search = document.getElementById('campaign-search').value.toLowerCase();
+    const status = document.getElementById('campaign-status-filter').value;
+    document.querySelectorAll('#campaigns-table tbody tr').forEach(row => {
+        const nameMatch = !search || row.dataset.name.includes(search);
+        const statusMatch = !status || row.dataset.status === status;
+        row.style.display = nameMatch && statusMatch ? '' : 'none';
+    });
+}
+</script>
 {% endblock %}

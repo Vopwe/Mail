@@ -25,6 +25,7 @@
             <input type="hidden" name="redirect_to" value="/campaigns/{{ campaign.id }}">
             <button type="submit" class="btn btn-primary">Verify All Emails</button>
         </form>
+        <a href="/emails/export?campaign_id={{ campaign.id }}" class="btn btn-secondary">Export CSV</a>
         {% endif %}
         <a href="/emails?campaign_id={{ campaign.id }}" class="btn btn-secondary">View All Emails</a>
     </div>
@@ -51,13 +52,6 @@
 </div>
 {% endif %}
 
-<!-- Verification progress (shown by JS when verification task is running) -->
-<div class="verify-progress" id="verify-progress" data-task-id="{{ request.args.get('verification_task', '') }}" style="display: none;">
-    <div class="progress-bar-container">
-        <div class="progress-bar" id="verify-progress-bar" style="width: 0%"></div>
-    </div>
-    <p class="progress-text" id="verify-progress-text">Verifying...</p>
-</div>
 
 <div class="stats-grid stats-grid-sm">
     <div class="stat-card">
@@ -240,6 +234,5 @@
 {% if campaign.status in ['generating', 'crawling'] or task_id %}
     pollTasks();
 {% endif %}
-    pollVerificationTask();
 </script>
 {% endblock %}
