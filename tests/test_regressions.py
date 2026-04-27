@@ -7,6 +7,7 @@ import shutil
 import threading
 import unittest
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 import uuid
 
@@ -221,6 +222,70 @@ class RegressionTests(unittest.TestCase):
         self.assertIn(f"/campaigns/{campaign_id}", location)
         self.assertIn("campaign_task=", location)
         run_in_background.assert_called_once()
+
+    def test_running_task_survives_fast_app_restart(self):
+        now = datetime.now().isoformat()
+        database.upsert_task(
+            task_id="fresh-task",
+            task_type="campaign",
+            campaign_id=1,
+            status="running",
+            progress=40,
+            total=100,
+            message="Crawling...",
+            started_at=now,
+            updated_at=now,
+        )
+
+        tasks._tasks.clear()
+        tasks.init_tasks()
+
+        task = tasks.get_task("fresh-task")
+        self.assertIsNotNone(task)
+        self.assertEqual(task.status, "running")
+        self.assertEqual(task.error, "")
+
+    def test_stale_running_task_fails_after_heartbeat_window(self):
+        old = (datetime.now() - timedelta(seconds=tasks.STALE_TASK_SECONDS + 60)).isoformat()
+        database.upsert_task(
+            task_id="stale-task",
+            task_type="campaign",
+            campaign_id=1,
+            status="running",
+            progress=40,
+            total=100,
+            message="Crawling...",
+            started_at=old,
+            updated_at=old,
+        )
+
+        tasks._tasks.clear()
+        tasks.init_tasks()
+
+        task = tasks.get_task("stale-task")
+        self.assertEqual(task.status, "failed")
+        self.assertEqual(task.error, "Server restarted during task")
+
+    def test_heartbeat_keeps_long_task_alive(self):
+        task_id = tasks.create_task("campaign", campaign_id=1)
+        before = tasks.get_task(task_id).updated_at
+
+        with patch("tasks._now_iso", return_value=(datetime.now() + timedelta(seconds=30)).isoformat()):
+            tasks.heartbeat_task(task_id)
+
+        task = tasks.get_task(task_id)
+        self.assertEqual(task.status, "running")
+        self.assertGreater(task.updated_at, before)
+
+    def test_completed_task_reports_full_progress(self):
+        task_id = tasks.create_task("campaign", campaign_id=1)
+        tasks.update_task(task_id, progress=75, total=100, message="Almost done")
+        tasks.complete_task(task_id, "Done")
+
+        task = tasks.get_task(task_id)
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(task.progress, 100)
+        self.assertEqual(task.to_dict()["percent"], 100)
 
     def test_smtp_probe_tries_multiple_hosts_before_reporting_unavailable(self):
         attempts = []
