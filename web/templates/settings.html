@@ -43,17 +43,26 @@
         <h2>AI Generation</h2>
         <div class="form-row">
             <div class="form-group">
+                <label for="max_running_campaigns">Max Running Campaigns</label>
+                <input type="number" id="max_running_campaigns" name="max_running_campaigns"
+                       value="{{ settings.max_running_campaigns }}" min="1" max="10">
+                <span class="hint">Campaigns above this limit wait in queue. Recommended: 2 on a good VPS.</span>
+            </div>
+            <div class="form-group">
                 <label for="ai_concurrency">Parallel AI Calls</label>
                 <input type="number" id="ai_concurrency" name="ai_concurrency"
                        value="{{ settings.ai_concurrency }}" min="1" max="50">
                 <span class="hint">How many AI requests run simultaneously.</span>
             </div>
+        </div>
+        <div class="form-row">
             <div class="form-group">
                 <label for="urls_per_batch">URLs per AI Batch</label>
                 <input type="number" id="urls_per_batch" name="urls_per_batch"
                        value="{{ settings.urls_per_batch }}" min="5" max="50">
                 <span class="hint">URLs the AI generates per niche/city combo.</span>
             </div>
+            <div class="form-group"></div>
         </div>
     </div>
 

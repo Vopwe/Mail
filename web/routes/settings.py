@@ -17,6 +17,7 @@ def index():
             "openrouter_api_key": request.form.get("openrouter_api_key", "").strip(),
             "openrouter_model": request.form.get("openrouter_model", "").strip() or config.OPENROUTER_MODEL,
             "ai_concurrency": int(request.form.get("ai_concurrency", 30)),
+            "max_running_campaigns": int(request.form.get("max_running_campaigns", config.MAX_RUNNING_CAMPAIGNS)),
             "verify_concurrency": int(request.form.get("verify_concurrency", 30)),
             "max_concurrent_requests": int(request.form.get("max_concurrent_requests", 30)),
             "request_timeout": int(request.form.get("request_timeout", 12)),

@@ -19,6 +19,11 @@ def create_app() -> Flask:
 
     database.init_db()
     tasks.init_tasks()
+    try:
+        import campaign_queue
+        campaign_queue.start_queued_campaigns()
+    except Exception:
+        pass
 
     # ── Rate Limiting ────────────────────────────────────────────
     limiter = Limiter(

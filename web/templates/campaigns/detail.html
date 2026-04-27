@@ -31,7 +31,7 @@
     </div>
 </div>
 
-{% if campaign.status in ['generating', 'crawling'] or current_task %}
+{% if campaign.status in ['queued', 'generating', 'crawling'] or current_task %}
 <div class="progress-section" id="progress-section" data-campaign-id="{{ campaign.id }}" data-task-id="{{ task_id or '' }}">
     <div class="progress-bar-container">
         <div class="progress-bar" id="progress-bar" style="width: {{ current_task.percent if current_task else 0 }}%"></div>
@@ -42,6 +42,8 @@
                 {{ current_task.message or 'Completed!' }}
             {% elif current_task.status == 'failed' %}
                 {{ current_task.error or 'Campaign failed.' }}
+            {% elif current_task.status == 'queued' %}
+                {{ current_task.message or 'Queued. Waiting for an open campaign slot...' }}
             {% else %}
                 {{ current_task.message or 'Running...' }}
             {% endif %}
@@ -231,7 +233,7 @@
 
 {% block scripts %}
 <script>
-{% if campaign.status in ['generating', 'crawling'] or task_id %}
+{% if campaign.status in ['queued', 'generating', 'crawling'] or task_id %}
     pollTasks();
 {% endif %}
 </script>

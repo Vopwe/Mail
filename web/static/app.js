@@ -107,6 +107,13 @@ function pollTasks() {
             return;
         }
 
+        if (task.status === 'queued') {
+            setStatus('queued');
+            setProgress(task.percent || 0, task.message || 'Queued. Waiting for an open campaign slot...');
+            setTimeout(poll, 3000);
+            return;
+        }
+
         const status = task.message && task.message.startsWith('Generating')
             ? 'generating'
             : 'crawling';

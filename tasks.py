@@ -14,7 +14,7 @@ class TaskStatus:
     task_id: str
     task_type: str = ""
     campaign_id: int | None = None
-    status: str = "running"   # running | completed | failed
+    status: str = "running"   # queued | running | completed | failed
     progress: int = 0
     total: int = 0
     message: str = ""
@@ -188,12 +188,19 @@ def init_tasks():
     _load_from_db()
 
 
-def create_task(task_type: str = "", campaign_id: int | None = None) -> str:
+def create_task(
+    task_type: str = "",
+    campaign_id: int | None = None,
+    status: str = "running",
+    message: str = "",
+) -> str:
     task_id = uuid.uuid4().hex[:12]
     task = TaskStatus(
         task_id=task_id,
         task_type=task_type,
         campaign_id=campaign_id,
+        status=status,
+        message=message,
         started_at=_now_iso(),
         updated_at=_now_iso(),
     )

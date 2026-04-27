@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import uuid
 
 import config
+import campaign_queue
 import database
 import tasks
 from verification import verifier
@@ -286,6 +287,38 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(task.status, "completed")
         self.assertEqual(task.progress, 100)
         self.assertEqual(task.to_dict()["percent"], 100)
+
+    def test_campaign_is_queued_when_running_limit_is_full(self):
+        config.save_settings({"max_running_campaigns": 1})
+        active_id = database.insert_campaign("Active", ["agency"], ["USA"], ["Seattle"])
+        queued_id = database.insert_campaign("Queued", ["plumber"], ["USA"], ["Seattle"])
+        database.update_campaign_status(active_id, "generating")
+
+        task_id, started = campaign_queue.enqueue_campaign(queued_id)
+
+        campaign = database.get_campaign(queued_id)
+        task = tasks.get_task(task_id)
+        self.assertFalse(started)
+        self.assertEqual(campaign["status"], "queued")
+        self.assertEqual(task.status, "queued")
+
+    def test_queued_campaign_starts_when_slot_opens(self):
+        config.save_settings({"max_running_campaigns": 1})
+        active_id = database.insert_campaign("Active", ["agency"], ["USA"], ["Seattle"])
+        queued_id = database.insert_campaign("Queued", ["plumber"], ["USA"], ["Seattle"])
+        database.update_campaign_status(active_id, "generating")
+        task_id, started = campaign_queue.enqueue_campaign(queued_id)
+        self.assertFalse(started)
+
+        database.update_campaign_status(active_id, "done")
+        with patch("campaign_queue.tasks.run_in_background") as run_in_background:
+            campaign_queue.start_queued_campaigns()
+
+        campaign = database.get_campaign(queued_id)
+        task = tasks.get_task(task_id)
+        self.assertEqual(campaign["status"], "generating")
+        self.assertEqual(task.status, "running")
+        run_in_background.assert_called_once()
 
     def test_smtp_probe_tries_multiple_hosts_before_reporting_unavailable(self):
         attempts = []

@@ -581,6 +581,7 @@ a:hover {
 }
 
 .badge-pending { background: #F3F4F6; color: #6B7280; }
+.badge-queued { background: #EDE9FE; color: #6D28D9; }
 .badge-generating { background: #DBEAFE; color: #2563EB; }
 .badge-crawling { background: #FEF3C7; color: #D97706; }
 .badge-crawled { background: #D1FAE5; color: #059669; }

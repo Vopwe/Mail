@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 import database
 import config
 import tasks
-from web.routes._campaign_runner import run_campaign
+import campaign_queue
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("campaigns", __name__)
@@ -83,14 +83,16 @@ def run(campaign_id):
         flash("Campaign not found.", "error")
         return redirect(url_for("campaigns.list_campaigns"))
 
-    if campaign["status"] in ("generating", "crawling"):
-        flash("Campaign is already running.", "warning")
+    if campaign["status"] in ("queued", "generating", "crawling"):
+        flash("Campaign is already queued or running.", "warning")
         return redirect(url_for("campaigns.detail", campaign_id=campaign_id))
 
-    task_id = tasks.create_task(task_type="campaign", campaign_id=campaign_id)
-    tasks.run_in_background(run_campaign, task_id, campaign_id)
+    task_id, started = campaign_queue.enqueue_campaign(campaign_id)
 
-    flash(f"Campaign started. Task ID: {task_id}", "success")
+    if started:
+        flash(f"Campaign started. Task ID: {task_id}", "success")
+    else:
+        flash(f"Campaign queued. Task ID: {task_id}", "success")
     return redirect(url_for("campaigns.detail", campaign_id=campaign_id, campaign_task=task_id))
 
 

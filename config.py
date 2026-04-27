@@ -82,6 +82,7 @@ URLS_PER_BATCH = 20
 
 # ─── AI Concurrency ──────────────────────────────────────────────────
 AI_CONCURRENCY = 30
+MAX_RUNNING_CAMPAIGNS = 2
 
 # ─── Verification Concurrency ────────────────────────────────────────
 VERIFY_CONCURRENCY = 30
@@ -175,6 +176,7 @@ def get_all_settings() -> dict:
         "openrouter_api_key": OPENROUTER_API_KEY,
         "openrouter_model": OPENROUTER_MODEL,
         "ai_concurrency": AI_CONCURRENCY,
+        "max_running_campaigns": MAX_RUNNING_CAMPAIGNS,
         "verify_concurrency": VERIFY_CONCURRENCY,
         "max_concurrent_requests": MAX_CONCURRENT_REQUESTS,
         "request_timeout": REQUEST_TIMEOUT,
