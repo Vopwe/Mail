@@ -1,8 +1,10 @@
 """
 Campaign execution logic — runs in background thread.
-Bing+DDG+AI URL generation (parallel) + async crawling + email extraction.
+Bing+DDG+AI URL generation (parallel combos) + async crawling + email extraction.
 """
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import tldextract
 import database
 import config
@@ -92,26 +94,40 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
         message=f"Generating URLs for {total_combos} combinations (Bing+DDG+AI, mode={source_mode})...",
     )
 
-    # Run combos sequentially — each combo already runs Bing+DDG in parallel internally
+    # Run combos in parallel — each combo runs Bing+DDG internally
     all_url_rows = []
     source_counts = {"bing": 0, "ddg": 0, "ai": 0}
+    completed = 0
+    lock = threading.Lock()
 
-    for idx, combo in enumerate(combos):
-        rows = _generate_for_combo(combo, urls_per_batch, source_mode)
-        for row in rows:
-            row["campaign_id"] = campaign_id
-            source = row.pop("source", "unknown")
-            if source in source_counts:
-                source_counts[source] += 1
-        all_url_rows.extend(rows)
+    # Limit parallel combos to avoid hammering search engines
+    max_parallel = min(3, total_combos)
 
-        niche, city, country, _ = combo
-        tasks.update_task(
-            task_id,
-            progress=idx + 1,
-            message=f"[{idx + 1}/{total_combos}] Generated: {niche} in {city}, {country} "
-                    f"(Bing:{source_counts['bing']} DDG:{source_counts['ddg']} AI:{source_counts['ai']})",
-        )
+    with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+        futures = {
+            executor.submit(_generate_for_combo, combo, urls_per_batch, source_mode): combo
+            for combo in combos
+        }
+        for future in as_completed(futures):
+            combo = futures[future]
+            rows = future.result()
+            for row in rows:
+                row["campaign_id"] = campaign_id
+
+            with lock:
+                for row in rows:
+                    source = row.get("source", "unknown")
+                    if source in source_counts:
+                        source_counts[source] += 1
+                all_url_rows.extend(rows)
+                completed += 1
+                niche, city, country, _ = combo
+                tasks.update_task(
+                    task_id,
+                    progress=completed,
+                    message=f"[{completed}/{total_combos}] Generated: {niche} in {city}, {country} "
+                            f"(Bing:{source_counts['bing']} DDG:{source_counts['ddg']} AI:{source_counts['ai']})",
+                )
 
     # Cross-campaign domain dedup: remove URLs already crawled elsewhere
     deduped_count = 0
