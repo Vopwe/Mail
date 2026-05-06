@@ -8,17 +8,99 @@
 
 <form method="post" class="form-card">
     <div class="settings-tabs">
-        <button type="button" class="settings-tab active" data-tab="ai">AI Config</button>
+        <button type="button" class="settings-tab active" data-tab="search">Search</button>
+        <button type="button" class="settings-tab" data-tab="ai">AI / OpenRouter</button>
         <button type="button" class="settings-tab" data-tab="crawl">Crawl</button>
         <button type="button" class="settings-tab" data-tab="verify">Verification</button>
         <button type="button" class="settings-tab" data-tab="security">Security</button>
     </div>
 
-    <div class="settings-panel active" id="tab-ai">
-        <h2>AI Providers</h2>
+    <!-- ── Search Settings ──────────────────────────────────────── -->
+    <div class="settings-panel active" id="tab-search">
+        <h2>URL Source Mode</h2>
         <div class="form-row">
             <div class="form-group">
-                <label for="deepseek_api_key">DeepSeek API Key (Primary)</label>
+                <label for="url_source_mode">URL Source</label>
+                <select id="url_source_mode" name="url_source_mode">
+                    <option value="both" {% if settings.get('url_source_mode', 'both') == 'both' %}selected{% endif %}>Both — Bing + DDG + AI backfill (recommended)</option>
+                    <option value="search_only" {% if settings.url_source_mode == 'search_only' %}selected{% endif %}>Search Only — Bing + DDG, no AI</option>
+                    <option value="ai_only" {% if settings.url_source_mode == 'ai_only' %}selected{% endif %}>AI Only — OpenRouter only</option>
+                </select>
+                <span class="hint">"Both" runs Bing+DDG in parallel, then uses AI to fill remaining quota.</span>
+            </div>
+            <div class="form-group">
+                <label for="urls_per_batch">URLs per Batch</label>
+                <input type="number" id="urls_per_batch" name="urls_per_batch"
+                       value="{{ settings.urls_per_batch }}" min="5" max="100">
+                <span class="hint">Target URLs per niche/city combo. 40 recommended for search mode.</span>
+            </div>
+        </div>
+
+        <h2>Bing Scraper</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="bing_delay_min">Min Delay (seconds)</label>
+                <input type="number" id="bing_delay_min" name="bing_delay_min"
+                       value="{{ settings.bing_delay_min }}" min="0.5" max="30" step="0.5">
+                <span class="hint">Minimum wait between Bing requests. Too low = rate limits.</span>
+            </div>
+            <div class="form-group">
+                <label for="bing_delay_max">Max Delay (seconds)</label>
+                <input type="number" id="bing_delay_max" name="bing_delay_max"
+                       value="{{ settings.bing_delay_max }}" min="1" max="30" step="0.5">
+                <span class="hint">Maximum wait between Bing requests.</span>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="bing_results_per_page">Results per Page</label>
+                <input type="number" id="bing_results_per_page" name="bing_results_per_page"
+                       value="{{ settings.bing_results_per_page }}" min="10" max="50">
+                <span class="hint">Bing results per page (10-50). Higher = fewer requests needed.</span>
+            </div>
+            <div class="form-group"></div>
+        </div>
+
+        <h2>DuckDuckGo Scraper</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="ddg_delay_min">Min Delay (seconds)</label>
+                <input type="number" id="ddg_delay_min" name="ddg_delay_min"
+                       value="{{ settings.ddg_delay_min }}" min="0.5" max="30" step="0.5">
+                <span class="hint">Minimum wait between DDG requests.</span>
+            </div>
+            <div class="form-group">
+                <label for="ddg_delay_max">Max Delay (seconds)</label>
+                <input type="number" id="ddg_delay_max" name="ddg_delay_max"
+                       value="{{ settings.ddg_delay_max }}" min="1" max="30" step="0.5">
+                <span class="hint">Maximum wait between DDG requests.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── AI / OpenRouter Settings ──────────────────────────────── -->
+    <div class="settings-panel" id="tab-ai">
+        <h2>OpenRouter (AI URL Generation)</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="openrouter_api_key">OpenRouter API Key</label>
+                <input type="password" id="openrouter_api_key" name="openrouter_api_key"
+                       value="{{ settings.openrouter_api_key }}" placeholder="sk-or-...">
+                <span class="hint">Get a free key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>. Free models work without credits.</span>
+            </div>
+            <div class="form-group">
+                <label for="openrouter_model">OpenRouter Model</label>
+                <input type="text" id="openrouter_model" name="openrouter_model"
+                       value="{{ settings.openrouter_model }}" placeholder="openrouter/free">
+                <span class="hint">Default: openrouter/free. Other free options: google/gemma-4-31b-it:free, openai/gpt-oss-120b:free</span>
+            </div>
+        </div>
+
+        <h2>DeepSeek (Legacy Fallback)</h2>
+        <p style="color: var(--text-muted); margin-bottom: 12px;">DeepSeek is kept as a legacy option. OpenRouter is now the primary AI provider.</p>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="deepseek_api_key">DeepSeek API Key</label>
                 <input type="password" id="deepseek_api_key" name="deepseek_api_key"
                        value="{{ settings.deepseek_api_key }}" placeholder="sk-...">
             </div>
@@ -28,19 +110,8 @@
                        value="{{ settings.deepseek_model }}" placeholder="deepseek-chat">
             </div>
         </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="openrouter_api_key">OpenRouter API Key (Fallback)</label>
-                <input type="password" id="openrouter_api_key" name="openrouter_api_key"
-                       value="{{ settings.openrouter_api_key }}" placeholder="sk-or-...">
-            </div>
-            <div class="form-group">
-                <label for="openrouter_model">OpenRouter Model</label>
-                <input type="text" id="openrouter_model" name="openrouter_model"
-                       value="{{ settings.openrouter_model }}" placeholder="deepseek/deepseek-chat">
-            </div>
-        </div>
-        <h2>AI Generation</h2>
+
+        <h2>Campaign Limits</h2>
         <div class="form-row">
             <div class="form-group">
                 <label for="max_running_campaigns">Max Running Campaigns</label>
@@ -48,24 +119,11 @@
                        value="{{ settings.max_running_campaigns }}" min="1" max="10">
                 <span class="hint">Campaigns above this limit wait in queue. Recommended: 2 on a good VPS.</span>
             </div>
-            <div class="form-group">
-                <label for="ai_concurrency">Parallel AI Calls</label>
-                <input type="number" id="ai_concurrency" name="ai_concurrency"
-                       value="{{ settings.ai_concurrency }}" min="1" max="50">
-                <span class="hint">How many AI requests run simultaneously.</span>
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="urls_per_batch">URLs per AI Batch</label>
-                <input type="number" id="urls_per_batch" name="urls_per_batch"
-                       value="{{ settings.urls_per_batch }}" min="5" max="50">
-                <span class="hint">URLs the AI generates per niche/city combo.</span>
-            </div>
             <div class="form-group"></div>
         </div>
     </div>
 
+    <!-- ── Crawl Settings ───────────────────────────────────────── -->
     <div class="settings-panel" id="tab-crawl">
         <h2>Crawl Settings</h2>
         <div class="form-row">
@@ -110,6 +168,7 @@
         </div>
     </div>
 
+    <!-- ── Verification Settings ────────────────────────────────── -->
     <div class="settings-panel" id="tab-verify">
         <h2>Verification</h2>
         <div class="form-row">
@@ -128,6 +187,7 @@
         </div>
     </div>
 
+    <!-- ── Security Settings ────────────────────────────────────── -->
     <div class="settings-panel" id="tab-security">
         <h2>Password Protection</h2>
         {% if has_password %}

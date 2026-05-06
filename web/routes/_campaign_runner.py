@@ -1,28 +1,30 @@
 """
 Campaign execution logic — runs in background thread.
-Parallel AI URL generation + async crawling.
+Bing+DDG+AI URL generation (parallel) + async crawling + email extraction.
 """
 import logging
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import tldextract
 import database
 import config
 import tasks
-from ai.client import generate_urls
+from search.scraper import generate_urls
 from crawler.fetcher import crawl_urls
 from crawler.extractor import extract_emails
 
 logger = logging.getLogger(__name__)
 
 
-def _generate_for_combo(combo, urls_per_batch):
-    """Worker: generate URLs for a single (niche, city, country, tld) combo."""
+def _generate_for_combo(combo, urls_per_batch, source_mode):
+    """Worker: generate URLs for a single (niche, city, country, tld) combo via Bing+DDG+AI."""
     niche, city, country, country_tld = combo
     try:
-        urls = generate_urls(niche, city, country, country_tld, count=urls_per_batch)
+        tagged_urls = generate_urls(
+            niche, city, country, country_tld,
+            count=urls_per_batch,
+            source_mode=source_mode,
+        )
         rows = []
-        for url in urls:
+        for url, source in tagged_urls:
             ext = tldextract.extract(url)
             domain = f"{ext.domain}.{ext.suffix}"
             rows.append({
@@ -31,6 +33,7 @@ def _generate_for_combo(combo, urls_per_batch):
                 "niche": niche,
                 "city": city,
                 "country": country,
+                "source": source,
             })
         return rows
     except Exception as e:
@@ -60,9 +63,10 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
     countries = campaign["countries"]
     cities = campaign["cities"]
     urls_per_batch = int(config.get_setting("urls_per_batch", config.URLS_PER_BATCH))
+    source_mode = config.get_setting("url_source_mode", config.URL_SOURCE_MODE)
 
     database.update_campaign_status(campaign_id, "generating")
-    tasks.update_task(task_id, message="Generating URLs...")
+    tasks.update_task(task_id, message="Generating URLs via Bing + DDG + AI...")
 
     combos = []
     for country in countries:
@@ -82,37 +86,32 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
                 combos.append((niche, city, country, country_tld))
 
     total_combos = len(combos)
-    ai_concurrency = int(config.get_setting("ai_concurrency", config.AI_CONCURRENCY))
     tasks.update_task(
         task_id,
         total=total_combos,
-        message=f"Generating URLs for {total_combos} combinations ({ai_concurrency} parallel)...",
+        message=f"Generating URLs for {total_combos} combinations (Bing+DDG+AI, mode={source_mode})...",
     )
 
+    # Run combos sequentially — each combo already runs Bing+DDG in parallel internally
     all_url_rows = []
-    completed = 0
-    lock = threading.Lock()
+    source_counts = {"bing": 0, "ddg": 0, "ai": 0}
 
-    with ThreadPoolExecutor(max_workers=ai_concurrency) as executor:
-        futures = {
-            executor.submit(_generate_for_combo, combo, urls_per_batch): combo
-            for combo in combos
-        }
-        for future in as_completed(futures):
-            combo = futures[future]
-            rows = future.result()
-            for row in rows:
-                row["campaign_id"] = campaign_id
-            all_url_rows.extend(rows)
+    for idx, combo in enumerate(combos):
+        rows = _generate_for_combo(combo, urls_per_batch, source_mode)
+        for row in rows:
+            row["campaign_id"] = campaign_id
+            source = row.pop("source", "unknown")
+            if source in source_counts:
+                source_counts[source] += 1
+        all_url_rows.extend(rows)
 
-            with lock:
-                completed += 1
-                niche, city, country, _ = combo
-                tasks.update_task(
-                    task_id,
-                    progress=completed,
-                    message=f"[{completed}/{total_combos}] Generated: {niche} in {city}, {country}",
-                )
+        niche, city, country, _ = combo
+        tasks.update_task(
+            task_id,
+            progress=idx + 1,
+            message=f"[{idx + 1}/{total_combos}] Generated: {niche} in {city}, {country} "
+                    f"(Bing:{source_counts['bing']} DDG:{source_counts['ddg']} AI:{source_counts['ai']})",
+        )
 
     # Cross-campaign domain dedup: remove URLs already crawled elsewhere
     deduped_count = 0
@@ -179,6 +178,7 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
     crawl_stats["domains_with_emails"] = domains_with_emails
     crawl_stats["domains_without_emails"] = domains_without_emails
     crawl_stats["total_emails_extracted"] = total_extracted
+    crawl_stats["url_sources"] = source_counts
     if crawl_stats["domains_reachable"] > 0:
         crawl_stats["emails_per_domain"] = round(total_extracted / crawl_stats["domains_reachable"], 2)
     else:
@@ -192,6 +192,7 @@ async def _run_campaign_steps(task_id: str, campaign_id: int, campaign: dict):
     # Build detailed completion message
     msg = (
         f"Done! {total_extracted} emails from {len(pending_urls)} URLs. "
+        f"Sources: Bing={source_counts['bing']} DDG={source_counts['ddg']} AI={source_counts['ai']} | "
         f"Reachable: {crawl_stats['domains_reachable']}/{crawl_stats['domains_total']} | "
         f"Pages: {crawl_stats['pages_fetched']} fetched, {crawl_stats['pages_failed']} failed | "
         f"Domains with emails: {domains_with_emails}"

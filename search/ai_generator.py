@@ -1,0 +1,233 @@
+"""
+OpenRouter AI URL generator — third source for URL generation.
+Uses free models on OpenRouter to generate business website URLs
+for a given niche/city/country.
+"""
+import json
+import logging
+import re
+
+import httpx
+
+import config
+
+logger = logging.getLogger(__name__)
+
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Current preferred free models.
+# Keep router first for best uptime, then strong specific fallbacks.
+FREE_MODELS = [
+    "openrouter/free",
+    "google/gemma-4-31b-it:free",
+    "openai/gpt-oss-120b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "openai/gpt-oss-20b:free",
+]
+
+
+def _get_api_key() -> str | None:
+    """Get OpenRouter API key from settings."""
+    key = config.get_setting("openrouter_api_key", None)
+    if key and key != "YOUR_OPENROUTER_KEY_HERE":
+        return key
+    return None
+
+
+def _get_model() -> str:
+    """Get configured model or first free default."""
+    return config.get_setting("openrouter_model", FREE_MODELS[0])
+
+
+def _candidate_models() -> list[str]:
+    configured = _get_model().strip()
+    models = []
+    if configured:
+        models.append(configured)
+    for model in FREE_MODELS:
+        if model not in models:
+            models.append(model)
+    return models
+
+
+def _build_prompt(niche: str, city: str, country: str, count: int) -> str:
+    """Build the URL generation prompt."""
+    return f"""You are a business directory expert. Generate a list of {count} real website URLs for "{niche}" businesses located in or serving {city}, {country}.
+
+Rules:
+- Return ONLY actual business website URLs (not directories like Yelp, Google, Facebook, etc.)
+- Each URL should be a different company/business
+- Include the full URL starting with https://
+- Focus on small-to-medium local businesses that are likely to have contact emails on their websites
+- Return one URL per line, nothing else — no numbering, no descriptions, no markdown
+
+Example output format:
+https://www.smithplumbing.com
+https://www.acmeroofing.com
+https://www.citycleaners.net"""
+
+
+def _build_followup_prompt(niche: str, city: str, country: str, count: int, seen_urls: list[str]) -> str:
+    seen_block = "\n".join(seen_urls[:80]) if seen_urls else "None yet"
+    return f"""Generate {count} MORE real business website URLs for "{niche}" businesses in or serving {city}, {country}.
+
+Already found URLs to avoid repeating:
+{seen_block}
+
+Rules:
+- Return ONLY new business website URLs not already listed above
+- No directories, social profiles, marketplaces, aggregators, or government sites
+- Full URLs starting with https://
+- One URL per line
+- No numbering, no markdown, no commentary"""
+
+
+async def generate_ai_urls(niche: str, city: str, country: str, count: int = 40) -> list[str]:
+    """
+    Generate business URLs using OpenRouter AI.
+    Returns list of URLs. Returns empty list if no API key or on error.
+    """
+    result = await generate_ai_urls_with_meta(niche, city, country, count=count)
+    return result["urls"]
+
+
+async def generate_ai_urls_with_meta(niche: str, city: str, country: str, count: int = 40) -> dict:
+    """
+    Generate business URLs using OpenRouter AI.
+    Returns URLs plus model/status/error metadata for UI and logs.
+    """
+    api_key = _get_api_key()
+    if not api_key:
+        logger.info("OpenRouter: no API key configured, skipping AI URL generation")
+        return {
+            "urls": [],
+            "status": "disabled",
+            "requested_model": _get_model(),
+            "actual_model": None,
+            "error": "OpenRouter API key not configured",
+        }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://graphenmail.app",
+        "X-Title": "GraphenMail",
+    }
+
+    errors = []
+    collected_urls = []
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            selected_actual_model = None
+            selected_requested_model = _get_model()
+            for attempt in range(3):
+                remaining = count - len({url.lower() for url in collected_urls})
+                if remaining <= 0:
+                    break
+
+                prompt = (
+                    _build_prompt(niche, city, country, remaining)
+                    if attempt == 0
+                    else _build_followup_prompt(niche, city, country, remaining, collected_urls)
+                )
+
+                round_urls = []
+                for model in _candidate_models():
+                    payload = {
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.7 if attempt == 0 else 0.9,
+                        "max_tokens": 2000,
+                    }
+                    logger.info("OpenRouter AI: generating URLs with %s attempt=%s", model, attempt + 1)
+                    resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+
+                    if resp.status_code != 200:
+                        error_text = f"{model}: HTTP {resp.status_code} - {resp.text[:200]}"
+                        logger.warning("OpenRouter returned %s", error_text)
+                        errors.append(error_text)
+                        continue
+
+                    data = resp.json()
+                    actual_model = data.get("model") or model
+                    content = _extract_content(data)
+                    urls = _parse_urls(content)
+                    if urls:
+                        selected_actual_model = actual_model
+                        round_urls = urls
+                        logger.info(
+                            "OpenRouter AI: generated %s URLs with requested=%s actual=%s attempt=%s",
+                            len(urls), model, actual_model, attempt + 1,
+                        )
+                        break
+
+                    error_text = f"{model}: response contained no parseable URLs"
+                    logger.warning("OpenRouter returned no usable URLs for %s", model)
+                    errors.append(error_text)
+
+                if not round_urls:
+                    break
+
+                seen = {url.lower() for url in collected_urls}
+                for url in round_urls:
+                    key = url.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        collected_urls.append(url)
+
+            unique_count = len(collected_urls)
+            if collected_urls:
+                status = "ok" if unique_count >= count else "partial"
+                return {
+                    "urls": collected_urls[:count],
+                    "status": status,
+                    "requested_model": selected_requested_model,
+                    "actual_model": selected_actual_model,
+                    "error": None if status == "ok" else f"Only generated {unique_count} of {count} requested URLs",
+                }
+
+    except Exception as e:
+        logger.error("OpenRouter AI error: %s", e)
+        return {
+            "urls": [],
+            "status": "error",
+            "requested_model": _get_model(),
+            "actual_model": None,
+            "error": str(e),
+        }
+
+    return {
+        "urls": [],
+        "status": "error",
+        "requested_model": _get_model(),
+        "actual_model": None,
+        "error": " | ".join(errors)[:500] if errors else "OpenRouter returned no URLs",
+    }
+
+
+def _extract_content(data: dict) -> str:
+    choices = data.get("choices") or []
+    if not choices:
+        return ""
+    message = choices[0].get("message") or {}
+    content = message.get("content", "")
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text", ""))
+            elif isinstance(item, str):
+                parts.append(item)
+        return "\n".join(parts)
+    return content if isinstance(content, str) else str(content)
+
+
+def _parse_urls(text: str) -> list[str]:
+    """Extract valid URLs from AI response text."""
+    urls = []
+    url_pattern = re.compile(r'https?://[^\s,\)\]\"\'>]+')
+    for match in url_pattern.findall(text):
+        url = match.rstrip(".,;:)")
+        if "." in url and len(url) > 10:
+            urls.append(url)
+    return urls

@@ -1,11 +1,23 @@
 """
-Configuration — API keys, model settings, crawl behavior.
+Configuration — API keys, model settings, crawl behavior, search settings.
 Supports runtime overrides via settings.json.
 """
 import json
 import os
 import secrets
 import time
+
+
+# ─── Feature Flags ────────────────────────────────────────────────────
+
+def tls_verify() -> bool:
+    """
+    Whether outbound httpx clients should verify TLS certificates.
+    Default True. Only set CRAWL_TLS_VERIFY=false on networks that proxy
+    outbound TLS via an internal CA (rare).
+    """
+    return os.getenv("CRAWL_TLS_VERIFY", "true").strip().lower() not in ("false", "0", "no")
+
 
 # ─── Paths ────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +35,20 @@ DEEPSEEK_MODEL = "deepseek-chat"
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "YOUR_OPENROUTER_KEY_HERE")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-OPENROUTER_MODEL = "deepseek/deepseek-chat"
+OPENROUTER_MODEL = "openrouter/free"
+
+# ─── Bing Scraper Defaults ──────────────────────────────────────────
+BING_DELAY_MIN = 2.0
+BING_DELAY_MAX = 5.0
+BING_RESULTS_PER_PAGE = 50
+
+# ─── DDG Scraper Defaults ───────────────────────────────────────────
+DDG_DELAY_MIN = 1.0
+DDG_DELAY_MAX = 3.0
+
+# ─── URL Source Mode ────────────────────────────────────────────────
+# "both" = Bing+DDG+AI, "search_only" = Bing+DDG, "ai_only" = OpenRouter only
+URL_SOURCE_MODE = "both"
 
 # ─── Crawl Defaults ──────────────────────────────────────────────────
 MAX_CONCURRENT_REQUESTS = 30
@@ -77,10 +102,10 @@ SOFT_RISK_PREFIXES = [
     "asdf", "qwerty", "aaa", "zzz", "xxx",
 ]
 
-# ─── URLs per AI call ────────────────────────────────────────────────
-URLS_PER_BATCH = 20
+# ─── URLs per search batch ───────────────────────────────────────────
+URLS_PER_BATCH = 40
 
-# ─── AI Concurrency ──────────────────────────────────────────────────
+# ─── AI Concurrency (legacy, kept for backward compat) ──────────────
 AI_CONCURRENCY = 30
 MAX_RUNNING_CAMPAIGNS = 2
 
@@ -184,6 +209,13 @@ def get_all_settings() -> dict:
         "max_pages_per_domain": MAX_PAGES_PER_DOMAIN,
         "urls_per_batch": URLS_PER_BATCH,
         "verify_timeout": VERIFY_TIMEOUT,
+        # Search (Bing + DDG) settings
+        "bing_delay_min": BING_DELAY_MIN,
+        "bing_delay_max": BING_DELAY_MAX,
+        "bing_results_per_page": BING_RESULTS_PER_PAGE,
+        "ddg_delay_min": DDG_DELAY_MIN,
+        "ddg_delay_max": DDG_DELAY_MAX,
+        "url_source_mode": URL_SOURCE_MODE,
     }
     settings = _load_settings()
     defaults.update(settings)
