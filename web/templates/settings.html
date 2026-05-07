@@ -9,7 +9,7 @@
 <form method="post" class="form-card">
     <div class="settings-tabs">
         <button type="button" class="settings-tab active" data-tab="search">Search</button>
-        <button type="button" class="settings-tab" data-tab="ai">AI / OpenRouter</button>
+        <button type="button" class="settings-tab" data-tab="ai">AI / DeepSeek</button>
         <button type="button" class="settings-tab" data-tab="crawl">Crawl</button>
         <button type="button" class="settings-tab" data-tab="verify">Verification</button>
         <button type="button" class="settings-tab" data-tab="security">Security</button>
@@ -78,15 +78,33 @@
         </div>
     </div>
 
-    <!-- ── AI / OpenRouter Settings ──────────────────────────────── -->
+    <!-- ── AI Settings ──────────────────────────────────────────── -->
     <div class="settings-panel" id="tab-ai">
-        <h2>OpenRouter (AI URL Generation)</h2>
+        <h2>DeepSeek (Primary AI Provider)</h2>
+        <p style="color: var(--text-muted); margin-bottom: 12px;">DeepSeek is the default AI for URL generation. Configure your key below.</p>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="deepseek_api_key">DeepSeek API Key</label>
+                <input type="password" id="deepseek_api_key" name="deepseek_api_key"
+                       value="{{ settings.deepseek_api_key }}" placeholder="sk-...">
+                <span class="hint">Get a key at <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a>. Used first for AI URL generation.</span>
+            </div>
+            <div class="form-group">
+                <label for="deepseek_model">DeepSeek Model</label>
+                <input type="text" id="deepseek_model" name="deepseek_model"
+                       value="{{ settings.deepseek_model }}" placeholder="deepseek-chat">
+                <span class="hint">Default: deepseek-chat. Leave as-is unless you know what you're doing.</span>
+            </div>
+        </div>
+
+        <h2>OpenRouter (Fallback)</h2>
+        <p style="color: var(--text-muted); margin-bottom: 12px;">OpenRouter is used as fallback if DeepSeek is not configured or fails. Free models available.</p>
         <div class="form-row">
             <div class="form-group">
                 <label for="openrouter_api_key">OpenRouter API Key</label>
                 <input type="password" id="openrouter_api_key" name="openrouter_api_key"
                        value="{{ settings.openrouter_api_key }}" placeholder="sk-or-...">
-                <span class="hint">Get a free key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>. Free models work without credits.</span>
+                <span class="hint">Optional. Get a free key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>.</span>
             </div>
             <div class="form-group">
                 <label for="openrouter_model">OpenRouter Model</label>
@@ -97,22 +115,7 @@
                     <option value="nvidia/nemotron-3-super-120b-a12b:free" {% if settings.get('openrouter_model') == 'nvidia/nemotron-3-super-120b-a12b:free' %}selected{% endif %}>Nemotron 3 Super 120B (Free)</option>
                     <option value="openai/gpt-oss-20b:free" {% if settings.get('openrouter_model') == 'openai/gpt-oss-20b:free' %}selected{% endif %}>GPT-OSS 20B (Free)</option>
                 </select>
-                <span class="hint">Router handles failover automatically. All models are free.</span>
-            </div>
-        </div>
-
-        <h2>DeepSeek (Legacy Fallback)</h2>
-        <p style="color: var(--text-muted); margin-bottom: 12px;">DeepSeek is kept as a legacy option. OpenRouter is now the primary AI provider.</p>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="deepseek_api_key">DeepSeek API Key</label>
-                <input type="password" id="deepseek_api_key" name="deepseek_api_key"
-                       value="{{ settings.deepseek_api_key }}" placeholder="sk-...">
-            </div>
-            <div class="form-group">
-                <label for="deepseek_model">DeepSeek Model</label>
-                <input type="text" id="deepseek_model" name="deepseek_model"
-                       value="{{ settings.deepseek_model }}" placeholder="deepseek-chat">
+                <span class="hint">Only used if DeepSeek fails or isn't configured.</span>
             </div>
         </div>
 

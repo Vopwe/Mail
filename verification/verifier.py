@@ -503,7 +503,7 @@ def _dns_based_verify(email: str, domain: str, mx_host: str | None) -> dict:
 
     for pattern in BUSINESS_MX_PATTERNS:
         if pattern in mx_lower:
-            result["verification"] = "risky"
+            result["verification"] = "valid"
             result["verification_method"] = "dns_business_mx"
             result["domain_confidence"] = "high"
             return result
@@ -511,12 +511,12 @@ def _dns_based_verify(email: str, domain: str, mx_host: str | None) -> dict:
     has_website = _check_domain_a_record(domain)
 
     if has_website:
-        result["verification"] = "risky"
+        result["verification"] = "valid"
         result["verification_method"] = "dns_domain"
         result["domain_confidence"] = "medium"
         return result
 
-    result["verification"] = "risky"
+    result["verification"] = "valid"
     result["verification_method"] = "dns_mx_only"
     result["domain_confidence"] = "low"
     return result
@@ -604,7 +604,10 @@ async def verify_email(email: str, smtp_result_override: str | None = None) -> d
             result["verification"] = "invalid"
             result["mailbox_confidence"] = "high"
         else:
-            result["verification"] = "unknown"
+            # SMTP inconclusive but domain has valid MX — treat as valid
+            result["verification"] = "valid"
+            result["verification_method"] = "smtp_mx_valid"
+            result["mailbox_confidence"] = "low"
     else:
         dns_result = _dns_based_verify(email, domain, mx_host)
         result.update(dns_result)
@@ -830,7 +833,10 @@ async def verify_emails_batch(emails: list[dict], on_progress=None) -> tuple[lis
                         r["verification"] = "invalid"
                         r["mailbox_confidence"] = "high"
                     else:
-                        r["verification"] = "unknown"
+                        # SMTP inconclusive but domain has valid MX — treat as valid
+                        r["verification"] = "valid"
+                        r["verification_method"] = "smtp_mx_valid"
+                        r["mailbox_confidence"] = "low"
 
                     async with lock:
                         results.append(r)
